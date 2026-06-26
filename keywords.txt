@@ -1,0 +1,4 @@
+Camelino	KEYWORD1
+camelino_init	KEYWORD2
+camelino_run	KEYWORD2
+camelino_reset	KEYWORD2

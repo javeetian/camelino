@@ -1,0 +1,4 @@
+(library
+ (name camelino)
+ (public_name camelino)
+ (modules camelino))

@@ -1,0 +1,7 @@
+external digital_write : int -> int -> unit = "caml_camellino_digital_write"
+external digital_read : int -> int = "caml_camellino_digital_read"
+external pin_mode : int -> int -> unit = "caml_camellino_pin_mode"
+external analog_read : int -> int = "caml_camellino_analog_read"
+external analog_write : int -> int -> unit = "caml_camellino_analog_write"
+external delay_ms : int -> unit = "caml_camellino_delay_ms"
+external millis : unit -> int = "caml_camellino_millis"

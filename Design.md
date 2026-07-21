@@ -930,61 +930,76 @@ camelino-check my_app.cma --heap 192k --flash 512k --word-size 32 --big-endian 0
 camelino/
 ├── LICENSE
 ├── README.md
-├── library.properties
-├── keywords.txt
+├── Design.md                      # 架构设计文档（本文件）
+├── Work.md                        # 工作计划
+├── .gitignore
+├── library.properties             # Arduino IDE 库元数据
+├── keywords.txt                   # Arduino IDE 语法高亮
 │
-├── lib/                          # OCaml 端库（opam/dune）
+├── lib/                           # OCaml 端库（opam/dune）
 │   └── camelino/
 │       ├── dune
-│       ├── camelino.ml           # external 声明
+│       ├── camelino.ml            # external 声明
 │       └── camelino.mli
 │
-├── src/                          # 设备端 C 运行时（平台无关）
-│   ├── Camelino.h / Camelino.cpp # Arduino 集成层（可选，仅 Arduino port）
+├── src/                           # 设备端 C 运行时（平台无关）
+│   ├── Camelino.h / Camelino.cpp  # Arduino 集成层（可选，仅 Arduino port）
 │   ├── core/
-│   │   ├── value.h / value.c
-│   │   ├── memory.h / memory.c
-│   │   ├── vm.h / vm.c
-│   │   ├── opcodes.h
-│   │   └── bytecode.h / bytecode.c
+│   │   ├── value.h / value.c      # OCaml value 表示（§5）
+│   │   ├── memory.h / memory.c    # 堆分配 + Mark-Sweep GC（§6）
+│   │   ├── vm.h / vm.c            # ZAM 解释器主循环（§4、§9.2）
+│   │   ├── opcodes.h              # ZAM 指令常量（§4.2）
+│   │   ├── bytecode.h / bytecode.c# .camel 加载与校验（§4.4、§9.1）
+│   │   ├── byteorder.h            # 字节序显式读写宏（§1.4、§3.4.2）
+│   │   ├── camelino_config.h      # 平台配置聚合 + 编译期断言（§3.4）
+│   │   └── error.h                # fatal 错误输出 + 断言宏（§6.4）
 │   ├── ffi/
-│   │   ├── ffi.h / ffi.c
-│   │   └── primitives.c
+│   │   ├── ffi.h / ffi.c          # C primitive 注册与 dispatch（§7.2）
+│   │   └── primitives.c           # 内置 primitive 表
 │   ├── repl/
-│   │   ├── repl.h / repl.c
-│   │   ├── line_editor.c
-│   │   └── history.c
-│   ├── bindings/                 # CAMLprim 包装层（只调用 HAL，§7.6）
+│   │   ├── repl.h / repl.c        # 串口字节码加载（§9.3）
+│   │   ├── line_editor.c          # 终端行编辑
+│   │   └── history.c              # 命令历史
+│   ├── bindings/                  # CAMLprim 包装层（只调用 HAL，§7.6）
 │   │   ├── gpio.c
 │   │   ├── serial.c
 │   │   ├── analog.c
-│   │   └── time.c
-│   └── hal/                      # 平台无关 HAL 接口（纯声明，§7.6）
-│       ├── gpio.h / uart.h / time.h / analog.h / flash.h / interrupt.h / cap.h
+│   │   ├── time.c
+│   │   └── error.c                # hal_err_t → OCaml 异常映射（§7.6.2）
+│   └── hal/                       # 平台无关 HAL 接口（纯声明，§7.6.3）
+│       ├── err.h                  # 统一错误码 hal_err_t
+│       ├── gpio.h
+│       ├── uart.h
+│       ├── time.h
+│       ├── analog.h
+│       ├── flash.h
+│       ├── interrupt.h
+│       └── cap.h                  # 能力探测
 │
-├── platform/                     # 平台适配器（每个移植目标一个目录）
-│   ├── arduino/                  # 首期：Arduino Core（含 arduino-pico 的 RP2350）
-│   │   ├── hal_adapter.c
+├── platform/                      # 平台适配器（每个移植目标一个目录，§7.6.4）
+│   ├── arduino/                   # 首期：Arduino Core（含 arduino-pico 的 RP2350）
 │   │   ├── platform_config.h
-│   │   └── port_init.c
-│   ├── picosdk/                  # pico-sdk 裸 API（未来）
-│   ├── espidf/                   # ESP-IDF（未来）
-│   ├── zephyr/                   # Zephyr RTOS（未来）
-│   ├── baremetal/                # 裸机（未来）
-│   └── host/                     # 主机模拟器（差分测试，§10.4）
+│   │   ├── hal_adapter.c          # hal_* → Arduino API 映射
+│   │   └── port_init.c            # setup()/loop() 驱动
+│   ├── picosdk/                   # pico-sdk 裸 API（未来）
+│   ├── espidf/                    # ESP-IDF（未来）
+│   ├── zephyr/                    # Zephyr RTOS（未来）
+│   ├── baremetal/                 # 裸机（未来）
+│   └── host/                      # 主机模拟器（差分测试，§10.4）
+│       └── platform_config.h
 │
 ├── examples/
-│   ├── Blink/                    # 预编译字节码点灯
-│   ├── REPL/                     # 串口字节码加载
+│   ├── Blink/                     # 预编译字节码点灯
+│   ├── REPL/                      # 串口字节码加载
 │   └── Sensor/
 │
 ├── tools/
-│   ├── camelino-embed/           # .cma → bytecode.h（链接+重定位+字长/字节序重写，§3.2）
-│   ├── camelino-check/           # 兼容性静态检查（§10.3）
-│   └── test_suite/               # ZAM 指令级 + 差分测试（§10.4）
+│   ├── camelino-embed/            # .cma → bytecode.h（链接+重定位+字长/字节序重写，§3.2）
+│   ├── camelino-check/            # 兼容性静态检查（§10.3）
+│   └── test_suite/                # ZAM 指令级 + 差分测试（§10.4）
 │
 └── test/
-    └── test_value.c
+    └── test_value.c               # 值表示单元测试
 ```
 
 ---

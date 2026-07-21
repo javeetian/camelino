@@ -1,16 +1,13 @@
-#include <Arduino.h>
+/**
+ * @file bindings/gpio.c
+ * @brief GPIO CAMLprim 包装层 — OCaml value <-> C 转换 + 调 HAL
+ *
+ * 只调用 hal_*，不直接碰 Arduino API 或其他平台 SDK。
+ * Phase 4 实现完整的 CAMLprim + GC 根保护。
+ */
+#include "hal/gpio.h"
+#include "hal/err.h"
 
-void gpio_bindings_init(void) {
-}
+/* ---- Phase 4 实现 CAMLprim 入口 ---- */
+/* TODO: caml_camellino_digital_write, caml_camellino_digital_read, caml_camellino_pin_mode */
 
-void gpio_pin_mode(uint8_t pin, uint8_t mode) {
-  pinMode(pin, mode);
-}
-
-void gpio_digital_write(uint8_t pin, uint8_t value) {
-  digitalWrite(pin, value);
-}
-
-uint8_t gpio_digital_read(uint8_t pin) {
-  return digitalRead(pin);
-}

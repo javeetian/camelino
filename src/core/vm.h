@@ -1,52 +1,34 @@
-// camelino_vm.h
+/**
+ * @file core/vm.h
+ * @brief ZAM 虚拟机解释器 — 公共 API
+ *
+ * caml_interpret() — 主解释循环，逐条执行 ZAM 指令直到 yield 或 STOP。
+ * 所有状态保存在全局变量中（单实例，嵌入式友好）。
+ */
+
 #ifndef CAMELINO_VM_H
 #define CAMELINO_VM_H
 
-#include "camelino_value.h"
+#include "platform.h"
+#include <stddef.h>
 
-// 字节码指令格式
-// 变长指令：操作码(1字节) + 操作数(0-4字节)
-typedef struct {
-    uint8_t* code;          // 字节码段
-    size_t code_size;       // 字节码长度
-    caml_value_t* constants; // 常量池
-    size_t num_constants;   // 常量数
-    caml_value_t* globals;   // 全局变量表
-    size_t num_globals;     // 全局变量数
-} caml_bytecode_t;
+/* ---- API ---- */
 
-// 虚拟机状态
-typedef struct {
-    // 执行栈
-    caml_value_t* stack;        // 栈底
-    caml_value_t* sp;           // 栈顶指针
-    caml_value_t* stack_limit;  // 栈上限
-    
-    // 程序计数器
-    uint8_t* pc;
-    
-    // 当前执行的字节码
-    caml_bytecode_t* bc;
-    
-    // 全局环境
-    caml_value_t* global_env;
-    size_t global_env_size;
-    
-    // 调用帧链表
-    struct caml_frame* frames;
-    
-    // 异常处理
-    struct caml_exn_handler* handlers;
-    
-    // 统计信息
-    uint32_t instr_count;   // 已执行指令数
-    uint32_t gc_count;      // GC 次数
-} caml_vm_t;
+void caml_vm_init(void);
 
-// VM API
-int caml_vm_init(caml_vm_t* vm, caml_memory_config_t* mem_config);
-int caml_vm_load(caml_vm_t* vm, const caml_bytecode_t* bc);
-int caml_vm_run(caml_vm_t* vm, caml_value_t* result);
-void caml_vm_reset(caml_vm_t* vm);
+/* 加载字节码到 VM */
+void caml_load_bytecode_buf(const uint8_t* code, size_t code_size,
+                             const uint8_t* data, size_t data_size);
+
+/* 主解释循环（在安全点或 STOP 时返回） */
+void caml_interpret(void);
+
+/* 寄存器访问（测试/调试用） */
+value caml_get_acc(void);
+void  caml_set_acc(value v);
+value caml_get_sp(mlsize_t slot);     /* sp[slot] */
+value caml_get_global(mlsize_t slot);
+void  caml_set_global(mlsize_t slot, value v);
+int   caml_vm_halted(void);           /* STOP 后返回 true */
 
 #endif

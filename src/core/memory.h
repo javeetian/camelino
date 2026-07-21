@@ -1,30 +1,41 @@
-// camelino_memory.h
+/**
+ * @file core/memory.h
+ * @brief 静态内存池 + bump 分配器（Phase 1.2，无 GC）
+ *
+ * Design.md §6.2 布局：
+ *   heap    — 静态 uint8_t 数组，bump alloc（Phase 3 加入 GC）
+ *   stack   — ZAM 值栈，从高端向低端增长
+ *   globals — 全局变量区，按槽位号索引
+ */
+
 #ifndef CAMELINO_MEMORY_H
 #define CAMELINO_MEMORY_H
 
-#include "camelino_value.h"
+#include "platform.h"     /* value, header_t, mlsize_t, tag_t */
+#include "camelino_config.h"
 
-// 内存区域配置（针对 RP2350 的 520KB SRAM）
-typedef struct {
-    void* heap_start;      // 堆起始地址
-    void* heap_end;        // 堆结束地址
-    size_t stack_size;     // C 栈预留
-    size_t gc_threshold;   // GC 触发阈值
-} caml_memory_config_t;
+/* ---- API ---- */
 
-// 默认配置：堆 256KB，栈 64KB，GC 阈值 200KB
-#define CAML_DEFAULT_CONFIG { \
-    .heap_start = (void*)0x20000000, \
-    .heap_end = (void*)0x20040000,   \
-    .stack_size = 65536,             \
-    .gc_threshold = 204800           \
-}
+void  caml_memory_init(void);
 
-// 内存分配器 API
-void caml_memory_init(const caml_memory_config_t* config);
-void* caml_alloc(size_t size, int tag);
-void caml_gc_mark(caml_value_t v);
-void caml_gc_sweep(void);
-void caml_gc_collect(void);
+/* 分配堆块（返回指向 field0 的 value，header 在返回指针之前） */
+value caml_alloc(mlsize_t wosize, tag_t tag);
+value caml_alloc_small(mlsize_t wosize, tag_t tag);  /* 同 caml_alloc（Phase 3 优化） */
+
+/* 值栈 */
+void  caml_stack_init(void);
+value* caml_stack_pointer(void);       /* 当前 sp */
+void  caml_stack_push(value v);
+value caml_stack_pop(void);
+int   caml_stack_check_overflow(void); /* 1 = 溢出 */
+
+/* 全局变量 */
+void  caml_globals_init(void);
+value caml_global_get(mlsize_t slot);
+void  caml_global_set(mlsize_t slot, value v);
+
+/* 堆统计（调试用） */
+size_t caml_heap_used(void);
+size_t caml_heap_total(void);
 
 #endif

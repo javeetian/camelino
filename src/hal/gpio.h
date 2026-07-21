@@ -3,7 +3,7 @@
  * @brief HAL GPIO 抽象接口 — 平台无关的数字 I/O
  *
  * 每个平台在 platform/<name>/hal_adapter.c 中实现此接口。
- * 调用者（bindings/*.c）不直接依赖任何平台 SDK（如 Arduino digitalWrite）。
+ * 调用者（bindings/ 下的文件）不直接依赖任何平台 SDK（如 Arduino digitalWrite）。
  */
 
 #ifndef CAMELINO_HAL_GPIO_H

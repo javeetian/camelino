@@ -1,0 +1,25 @@
+# Camelino C code style — C99, embedded-friendly
+# Usage: clang-format -i src/core/*.c
+
+Language:        C
+BasedOnStyle:    LLVM
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+ColumnLimit:     100
+
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+PointerAlignment: Right
+SpaceAfterCStyleComment: true
+
+AlignConsecutiveMacros: true
+AlignConsecutiveAssignments: false
+
+SortIncludes:    false
+
+# 紧凑的单行注释保留
+ReflowComments:  false

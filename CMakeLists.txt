@@ -1,0 +1,174 @@
+# Camelino — CMake 构建系统
+# ============================
+#
+# 两个目标：
+#   camelino-host  — 主机模拟器（差分测试用）
+#   camelino-test  — 设备端 C 单元测试（在主机上运行）
+#
+# 交叉编译（arm-none-eabi-gcc）在 CMake toolchain file 中配置，
+# 由 PlatformIO / CI 脚本驱动。
+
+cmake_minimum_required(VERSION 3.16)
+project(Camelino VERSION 0.1.0 LANGUAGES C)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# ---- 编译选项 ----
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
+endif()
+
+# ---- 平台选择 ----
+# 默认 host；交叉编译时由 toolchain file 覆盖
+if(NOT DEFINED CAMELINO_PLATFORM)
+    set(CAMELINO_PLATFORM "host" CACHE STRING "Target platform: host, arduino, picosdk, espidf, zephyr, baremetal")
+endif()
+
+# ---- 根目录（用于 include path） ----
+set(CAMELINO_ROOT ${CMAKE_SOURCE_DIR})
+
+# ---- 平台配置 ----
+# 各平台在 platform/<name>/platform_config.h 中定义 CAMELINO_WORD_SIZE 等宏
+# 构建系统只需添加正确的 include 路径
+if(CAMELINO_PLATFORM STREQUAL "host")
+    add_definitions(-DCAMELINO_PLATFORM_HOST)
+    set(PLATFORM_DIR ${CAMELINO_ROOT}/platform/host)
+elseif(CAMELINO_PLATFORM STREQUAL "arduino")
+    add_definitions(-DCAMELINO_PLATFORM_ARDUINO)
+    set(PLATFORM_DIR ${CAMELINO_ROOT}/platform/arduino)
+else()
+    message(FATAL_ERROR "Unknown CAMELINO_PLATFORM: ${CAMELINO_PLATFORM}")
+endif()
+
+# ---- 公共 include 路径 ----
+# 顺序重要：platform 目录在前，这样 platform_config.h 优先被找到
+set(COMMON_INCLUDES
+    ${PLATFORM_DIR}            # platform_config.h
+    ${CAMELINO_ROOT}/src       # camelino core headers
+    ${CAMELINO_ROOT}/src/core  # value.h, memory.h, vm.h, ...
+    ${CAMELINO_ROOT}/src/hal   # hal/*.h
+    ${CAMELINO_ROOT}/src/ffi   # ffi.h
+    ${CAMELINO_ROOT}/src/bindings
+    ${CAMELINO_ROOT}/src/repl
+)
+
+# ---- 公共源文件（平台无关） ----
+
+set(CORE_SOURCES
+    src/core/value.c
+    src/core/memory.c
+    src/core/error.c
+    src/core/vm.c
+    src/core/bytecode.c
+)
+
+set(FFI_SOURCES
+    src/ffi/ffi.c
+    src/ffi/primitives.c
+)
+
+set(REPL_SOURCES
+    src/repl/repl.c
+    src/repl/line_editor.c
+    src/repl/history.c
+)
+
+set(BINDINGS_SOURCES
+    src/bindings/gpio.c
+    src/bindings/serial.c
+    src/bindings/analog.c
+    src/bindings/time.c
+    src/bindings/error.c
+)
+
+# ---- camelino-host：主机模拟器 ----
+
+if(CAMELINO_PLATFORM STREQUAL "host")
+    add_executable(camelino-host
+        ${CORE_SOURCES}
+        ${FFI_SOURCES}
+        ${REPL_SOURCES}
+        ${BINDINGS_SOURCES}
+        platform/host/port_init.c
+        platform/host/hal_adapter.c
+    )
+    target_include_directories(camelino-host PRIVATE ${COMMON_INCLUDES})
+endif()
+
+# ---- camelino-test：单元测试 ----
+
+# 每个 .c 文件中的 test_* 函数由 test runner 收集
+# 简单起见，直接用 CTest 跑单独编译的测试二进制
+enable_testing()
+
+# test_value
+add_executable(test_value
+    test/test_value.c
+    src/core/value.c
+)
+target_include_directories(test_value PRIVATE
+    ${PLATFORM_DIR}
+    ${CAMELINO_ROOT}/src/core
+)
+target_compile_definitions(test_value PRIVATE -DCAMELINO_UNIT_TEST)
+add_test(NAME test_value COMMAND test_value)
+
+# test_opcodes
+add_executable(test_opcodes
+    test/test_opcodes.c
+)
+target_include_directories(test_opcodes PRIVATE
+    ${PLATFORM_DIR}
+    ${CAMELINO_ROOT}/src/core
+)
+add_test(NAME test_opcodes COMMAND test_opcodes)
+
+# test_memory — 单步 cat + 编译（规避 MinGW GCC 14.2 多 .o 链接 bug）
+add_custom_target(test_memory_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_memory.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_memory_combined.c
+    COMMAND gcc test_memory_combined.c
+        -I${PLATFORM_DIR}
+        -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall
+        -o test_memory.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_memory_combined.c
+    DEPENDS
+        ${CAMELINO_ROOT}/test/test_memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_memory (cat+compile single TU)"
+)
+add_test(NAME test_memory COMMAND test_memory.exe)
+
+# test_vm
+add_custom_target(test_vm_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_vm.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_vm_combined.c
+    COMMAND gcc test_vm_combined.c
+        -I${PLATFORM_DIR}
+        -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable
+        -o test_vm.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_vm_combined.c
+    DEPENDS
+        ${CAMELINO_ROOT}/test/test_vm.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_vm (cat+compile single TU)"
+)
+add_test(NAME test_vm COMMAND test_vm.exe)

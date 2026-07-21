@@ -73,14 +73,52 @@ static inline double caml_read_double(const uint8_t* p) {
     return d;
 }
 
-/* ---- 别名（兼容 OCaml 风格命名） ---- */
+/* ---- 写入多字节整数（到字节流）---- */
 
-#define CAML_READ_UINT16(p)  caml_read_uint16(p)
-#define CAML_READ_UINT32(p)  caml_read_uint32(p)
-#define CAML_READ_UINT64(p)  caml_read_uint64(p)
-#define CAML_READ_INT16(p)   caml_read_int16(p)
-#define CAML_READ_INT32(p)   caml_read_int32(p)
-#define CAML_READ_INT64(p)   caml_read_int64(p)
-#define CAML_READ_DOUBLE(p)  caml_read_double(p)
+static inline void caml_write_uint16(uint8_t* p, uint16_t v) {
+#if CAMELINO_BIG_ENDIAN
+    p[0] = (uint8_t)(v >> 8);  p[1] = (uint8_t)(v);
+#else
+    p[0] = (uint8_t)(v);       p[1] = (uint8_t)(v >> 8);
+#endif
+}
+
+static inline void caml_write_uint32(uint8_t* p, uint32_t v) {
+#if CAMELINO_BIG_ENDIAN
+    p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16);
+    p[2] = (uint8_t)(v >> 8);  p[3] = (uint8_t)(v);
+#else
+    p[0] = (uint8_t)(v);       p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+#endif
+}
+
+static inline void caml_write_uint64(uint8_t* p, uint64_t v) {
+#if CAMELINO_BIG_ENDIAN
+    p[0] = (uint8_t)(v >> 56); p[1] = (uint8_t)(v >> 48);
+    p[2] = (uint8_t)(v >> 40); p[3] = (uint8_t)(v >> 32);
+    p[4] = (uint8_t)(v >> 24); p[5] = (uint8_t)(v >> 16);
+    p[6] = (uint8_t)(v >> 8);  p[7] = (uint8_t)(v);
+#else
+    p[0] = (uint8_t)(v);       p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+    p[4] = (uint8_t)(v >> 32); p[5] = (uint8_t)(v >> 40);
+    p[6] = (uint8_t)(v >> 48); p[7] = (uint8_t)(v >> 56);
+#endif
+}
+
+/* ---- 别名 ---- */
+
+#define CAML_READ_UINT16(p)   caml_read_uint16(p)
+#define CAML_READ_UINT32(p)   caml_read_uint32(p)
+#define CAML_READ_UINT64(p)   caml_read_uint64(p)
+#define CAML_READ_INT16(p)    caml_read_int16(p)
+#define CAML_READ_INT32(p)    caml_read_int32(p)
+#define CAML_READ_INT64(p)    caml_read_int64(p)
+#define CAML_READ_DOUBLE(p)   caml_read_double(p)
+
+#define CAML_WRITE_UINT16(p,v) caml_write_uint16((p),(v))
+#define CAML_WRITE_UINT32(p,v) caml_write_uint32((p),(v))
+#define CAML_WRITE_UINT64(p,v) caml_write_uint64((p),(v))
 
 #endif /* CAMELINO_CORE_BYTEORDER_H */

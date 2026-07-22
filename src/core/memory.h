@@ -38,6 +38,15 @@ void  caml_global_set(mlsize_t slot, value v);
 size_t caml_heap_used(void);
 size_t caml_heap_total(void);
 
+/* GC 统计（Phase 6.2） */
+typedef struct {
+    int    collections;      /* GC 执行次数 */
+    size_t freed_blocks;     /* 累计回收块数 */
+    size_t bytes_freed;      /* 累计回收字节数 */
+    size_t bytes_live_after; /* 最后一次 GC 后存活字节数 */
+} caml_gc_stats_t;
+void caml_get_gc_stats(caml_gc_stats_t* out);
+
 /* GC */
 void caml_gc_collect(void);
 

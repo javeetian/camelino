@@ -1,0 +1,82 @@
+name: Camelino CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---- Host simulator: build + unit tests + diff tests ----
+  host-tests:
+    name: Host Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc cmake ninja-build
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja
+
+      - name: Configure
+        run: cmake -G "Ninja" -B build -DCMAKE_C_COMPILER=gcc
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Unit Tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Diff Tests (hand-encoded)
+        run: bash tools/test_suite/run_diff_full.sh
+
+  # ---- OCaml: build camelino-embed + camelino-check ----
+  ocaml-tools:
+    name: OCaml Tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 4.14.x
+
+      - name: Build camelino-embed
+        run: |
+          cd tools/camelino-embed
+          opam exec -- ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
+
+      - name: Build camelino-check
+        run: |
+          cd tools/camelino-check
+          opam exec -- dune build main.exe
+
+      - name: Build camelino-repl
+        run: |
+          cd tools/camelino-repl
+          opam exec -- dune build main.exe
+
+      - name: Test camelino-check
+        run: |
+          echo 'let _ = 2 + 3' > /tmp/test.ml
+          opam exec -- ocamlc -c -o /tmp/test.cmo /tmp/test.ml
+          opam exec -- tools/camelino-check/_build/default/main.exe /tmp/test.cmo --heap 192k --word-size 32 --platform arduino
+
+  # ---- Syntax check: all C source files ----
+  syntax-check:
+    name: C Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          for f in src/core/*.c src/ffi/*.c src/bindings/*.c src/repl/*.c; do
+            gcc -fsyntax-only $f -Isrc/core -Iplatform/host -Isrc -Isrc/hal -Isrc/ffi -std=gnu99 -DCAMELINO_PLATFORM_HOST && echo "OK: $f" || echo "FAIL: $f"
+          done

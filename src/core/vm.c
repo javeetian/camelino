@@ -29,6 +29,8 @@ static const uint8_t* code_end = NULL;
 static value accu = 0, env_v = 0;
 static int extra_args = 0, halted = 0, yield_counter = 0;
 static value* trap = NULL;
+static size_t instruction_count = 0;
+static caml_trace_fn trace_hook = NULL;
 #define YIELD_INTERVAL 1000
 
 #define NEXT() (void)0
@@ -42,7 +44,7 @@ static value p_dispatch(int idx, value* args, int nargs) {
     case 3:return((caml_prim3_t)f)(args[0],args[1],args[2]);default:return Val_unit;}
 }
 
-void caml_vm_init(void){caml_memory_init();accu=Val_unit;env_v=Val_unit;extra_args=0;trap=NULL;halted=0;yield_counter=YIELD_INTERVAL;}
+void caml_vm_init(void){caml_memory_init();accu=Val_unit;env_v=Val_unit;extra_args=0;trap=NULL;halted=0;yield_counter=YIELD_INTERVAL;instruction_count=0;}
 void caml_startup(const uint8_t* c,size_t s){caml_vm_init();caml_load_bytecode_buf(c,s,NULL,0);caml_init_globals();}
 void caml_init_globals(void){}
 void caml_load_bytecode_buf(const uint8_t* c,size_t cs,const uint8_t*d,size_t ds){(void)d;(void)ds;code_start=c;code_end=c+cs;pc=code_start;halted=0;}
@@ -51,6 +53,8 @@ void caml_interpret(void){
     if(halted||!pc)return;
     for(;;){
         uint8_t op=*pc++;
+        instruction_count++;
+        if(trace_hook)trace_hook(op,(size_t)(pc-1-code_start),accu);
         switch(op){
         case CONST0:accu=Val_long(0);NEXT();break;
         case CONST1:accu=Val_long(1);NEXT();break;
@@ -203,6 +207,8 @@ value caml_get_sp(mlsize_t s){return caml_stack_pointer()[s];}
 value caml_get_global(mlsize_t s){return caml_global_get(s);}
 void caml_set_global(mlsize_t s,value v){caml_global_set(s,v);}
 int caml_vm_halted(void){return halted;}
+size_t caml_get_instruction_count(void){return instruction_count;}
+void caml_set_trace_hook(caml_trace_fn fn){trace_hook=fn;}
 
 value caml_callback(value closure,value arg){
     value se=env_v,sa=accu;int sx=extra_args;

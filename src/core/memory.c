@@ -26,6 +26,9 @@ typedef struct free_block {
 } free_block_t;
 static free_block_t* free_list = NULL;
 
+/* ---- GC 统计 ---- */
+static caml_gc_stats_t gc_stats = {0,0,0,0};
+
 /* ---- GC 根枚举依赖 vm.c —— 弱桩用于独立测试 ---- */
 extern value caml_get_acc(void); /* vm.c */
 extern value caml_get_env(void); /* vm.c */
@@ -101,6 +104,8 @@ static void gc_sweep(void) {
     uint8_t* p = camelino_heap;
     heap_used_bytes = 0;
     uint8_t* last_live = camelino_heap;
+    size_t freed = 0;
+    int freed_blocks = 0;
 
     while (is_valid_block(p, heap_ptr)) {
         header_t* h = (header_t*)p;
@@ -113,6 +118,8 @@ static void gc_sweep(void) {
             fb->size = total;
             fb->next = free_list;
             free_list = fb;
+            freed += total;
+            freed_blocks++;
         } else {
             /* Live: reset color to white for next GC cycle */
             *h = Make_header(wosize, Tag_hd(*h), Caml_white);
@@ -123,12 +130,22 @@ static void gc_sweep(void) {
     }
     /* Reset heap_ptr to after last live block */
     heap_ptr = (last_live > camelino_heap) ? last_live : camelino_heap;
+    /* Update GC stats */
+    gc_stats.freed_blocks += freed_blocks;
+    gc_stats.bytes_freed += freed;
+    gc_stats.bytes_live_after = heap_used_bytes;
+}
+
+void caml_get_gc_stats(caml_gc_stats_t* out) {
+    if (out) { out->collections = gc_stats.collections; out->freed_blocks = gc_stats.freed_blocks;
+               out->bytes_freed = gc_stats.bytes_freed; out->bytes_live_after = gc_stats.bytes_live_after; }
 }
 
 /* ---- GC entry point ---- */
 void caml_gc_collect(void) {
     if (gc_running) return;
     gc_running = 1;
+    gc_stats.collections++;
     gc_mark_roots();
     gc_sweep();
     gc_running = 0;

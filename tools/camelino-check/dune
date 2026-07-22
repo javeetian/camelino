@@ -1,5 +1,5 @@
 (executable
  (name main)
- (public_name camelino-check)
- (libraries)
+ (libraries compiler-libs.common)
+ (flags (:standard -w -32-26-27-69))
 )

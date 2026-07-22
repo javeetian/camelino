@@ -35,4 +35,13 @@ value caml_get_global(mlsize_t slot);
 void  caml_set_global(mlsize_t slot, value v);
 int   caml_vm_halted(void);           /* STOP 后返回 true */
 
+/* ---- 调试/性能 Hook（Phase 6.2 主机模拟器用） ---- */
+
+/* Trace hook: 每执行一条指令时回调。参数：opcode, pc偏移, acc值 */
+typedef void (*caml_trace_fn)(uint8_t op, size_t pc_offset, value acc);
+void caml_set_trace_hook(caml_trace_fn fn);
+
+/* 指令执行计数 */
+size_t caml_get_instruction_count(void);
+
 #endif

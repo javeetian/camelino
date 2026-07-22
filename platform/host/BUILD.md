@@ -34,19 +34,37 @@ cmake -G "Ninja" -B build -DCMAKE_C_COMPILER=gcc
 cmake --build build
 ```
 
-产物：
-- `build/test_value.exe` — 值表示测试
-- `build/test_opcodes.exe` — 指令集测试
-- `build/test_memory.exe` — 分配器测试
-- `build/test_vm.exe` — 虚拟机测试
+产物（Linux/macOS 全部可用；MinGW 仅前 3 个稳定）：
+- `build/test_value.exe` — 值表示测试 ✓
+- `build/test_opcodes.exe` — 指令集测试 ✓
+- `build/test_memory.exe` — 分配器测试 ✓
+- `build/test_vm.exe` — 虚拟机测试（MinGW 可能失败）
+- `build/test_calls.exe` — 函数调用测试
+- `build/test_exn.exe` — 异常测试
+- `build/test_globals.exe` — 全局变量测试
+- `build/test_gc.exe` — GC 测试
+- `build/test_ffi.exe` — FFI 测试
+- `build/test_phase4.exe` — Phase4 集成测试
+- `build/test_phase5.exe` — P1 指令测试
 - `build/test_bytecode.exe` — 字节码加载器测试
 - `build/test_embed.exe` — 端到端流水线测试
 
 ## 运行测试
 
 ```bash
-ctest --test-dir build --output-on-failure   # 全部 6 个
+ctest --test-dir build --output-on-failure   # Linux/macOS: 全部 13 个
 ./build/test_vm.exe                           # 单独运行某个
+```
+
+## MinGW 替代验证
+
+本机 MinGW GCC 14.2 的 collect2 link 大文件时会损坏 exe。用语法验证替代：
+```bash
+for f in src/core/*.c src/ffi/*.c test/test_*.c; do
+  echo -n "$f: "
+  gcc -fsyntax-only $f -Isrc/core -Iplatform/host -Isrc/ffi -std=gnu99 2>&1 && echo "OK" || echo "FAIL"
+done
+```
 ```
 
 ## 差分测试

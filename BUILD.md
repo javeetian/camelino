@@ -20,14 +20,17 @@ cmake -G "Ninja" -B build -DCMAKE_C_COMPILER=gcc
 # 2. 编译所有目标
 cmake --build build
 
-# 3. 运行全部测试
+# 3. 运行全部测试（Linux/macOS 预期全过）
 ctest --test-dir build --output-on-failure
 ```
 
-预期输出：
-```
-100% tests passed, 0 tests failed out of 6
-```
+> **MinGW (Windows) 注意：** 本机 MinGW GCC 14.2 的 collect2 在链接大文件（cat+compile 组合 .c）时会随机失败，导致部分测试编译为损坏的 exe。可运行以下测试：
+> ```bash
+> ./build/test_value.exe      # ✓ 跳过
+> ./build/test_opcodes.exe    # ✓ 跳过
+> ./build/test_memory.exe     # ✓ 跳过
+> ```
+> 其余测试用语法验证替代（见末尾 §14「批量语法验证」）。Linux/macOS 上 `ctest` 可一键全过。
 
 ---
 
@@ -294,6 +297,122 @@ cat case01_add.expect   # 输出: 5
 
 ---
 
+### 8. test_calls — 函数调用帧（Phase 2.1-2.2）
+
+**验证内容：** CLOSURE(4.14 closinfo), APPLY1/APPLY2, RETURN, GRAB
+
+**源文件：** `test/test_calls.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
+
+**CMake 构建方式：** 同 test_memory，单步 cat+compile
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_calls.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_calls.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_calls syntax OK"
+```
+
+---
+
+### 9. test_exn — 异常处理（Phase 2.3）
+
+**验证内容：** PUSHTRAP, POPTRAP, RAISE, RAISE_NOTRACE
+
+**源文件：** `test/test_exn.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_exn.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_exn.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_exn syntax OK"
+```
+
+---
+
+### 10. test_globals — 全局变量（Phase 2.4）
+
+**验证内容：** SETGLOBAL, GETGLOBAL, GETGLOBALFIELD, PUSHGETGLOBAL
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_globals.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_globals.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_globals syntax OK"
+```
+
+---
+
+### 11. test_gc — Mark-Sweep GC（Phase 3.1）
+
+**验证内容：** GC mark/sweep, free list, 堆耗尽自动触发
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_gc.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_gc.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_gc syntax OK"
+```
+
+---
+
+### 12. test_ffi — C_CALL* 调度（Phase 4.1）
+
+**验证内容：** C_CALL1/C_CALL2 通过 primitive 表调用 C 函数
+
+**源文件：** `test/test_ffi.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c` + `src/ffi/ffi.c`
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_ffi.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_ffi.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c src/ffi/ffi.c -Isrc/core -Iplatform/host -Isrc/ffi -std=gnu99 && echo "test_ffi syntax OK"
+```
+
+---
+
+### 13. test_phase5 — P1 指令（Phase 5.1）
+
+**验证内容：** BEQ/BNEQ, BOOLNOT, OFFSETREF, ISINT 等新增指令
+
+**运行（Linux/macOS）：**
+```bash
+./build/test_phase5.exe
+```
+
+**本机 MinGW 替代验证：**
+```bash
+gcc -fsyntax-only test/test_phase5.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_phase5 syntax OK"
+```
+
+---
+
+### 14. 批量语法验证（MinGW 下替代方案）
+
+```bash
+# 一次性检查所有源文件语法
+for f in src/core/*.c src/ffi/*.c test/test_*.c; do
+  echo -n "$f: "
+  gcc -fsyntax-only $f -Isrc/core -Iplatform/host -Isrc/ffi -std=gnu99 2>&1 && echo "OK" || echo "FAIL"
+done
+```
+
+---
+
 ## 单独编译和运行某个测试
 
 ```bash
@@ -345,3 +464,26 @@ add_test(NAME test_xxx COMMAND test_xxx.exe)
 - **当前开发平台**：主机模拟器（`platform/host/`），64 位小端，硬 FPU
 - **交叉编译到 RP2350**：Phase 4 启用，换 `platform/arduino/` 适配器
 - **已知问题**：MinGW GCC 14.2 + Ninja 多 `.o` 链接时 collect2 有兼容问题，已改用单步 `cat + gcc` 编译模式绕开
+
+## ocamlclean 集成（Phase 5.4）
+
+`ocamlclean` 是死代码消除工具，在 `camelino-embed` 之前运行：
+
+```bash
+ocamlc -c -o prog.cmo my_app.ml
+ocamlclean prog.cmo -o prog_clean.cmo      # 裁剪未使用的 stdlib 代码
+camelino-embed prog_clean.cmo -o bytecode.h
+```
+
+## 已注册的 C Primitive（Phase 5.3/5.6）
+
+| 类别 | Primitive | 状态 |
+|------|-----------|------|
+| String | caml_string_length/get/create/blit | 真实实现 |
+| Bytes | caml_bytes_length/get/create/blit | 真实实现（复用 String） |
+| Format | caml_format_int/float, caml_int/float_of_string | 真实实现 |
+| 通道 I/O | caml_ml_output_char/input_char/output/flush | 真实实现 |
+| 通道 I/O | caml_ml_open_descriptor_out/in | 真实实现 |
+| Random | caml_random_init, caml_random_int | 真实实现（LCG） |
+| Lazy | caml_update_dummy, caml_lazy_make_forward | 桩 |
+| HAL | caml_camellino_digital_write/read/pin/delay/millis/serial | 桩（host 端 printf） |

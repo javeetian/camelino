@@ -340,6 +340,22 @@ add_custom_target(test_phase4_target ALL
 )
 add_test(NAME test_phase4 COMMAND test_phase4.exe)
 
+# test_phase5
+add_custom_target(test_phase5_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_phase5.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_phase5_combined.c
+    COMMAND gcc test_phase5_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable -o test_phase5.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_phase5_combined.c
+    COMMENT "Building test_phase5"
+)
+add_test(NAME test_phase5 COMMAND test_phase5.exe)
+
 # test_gc_roots
 add_custom_target(test_gc_roots_target ALL
     COMMAND ${CMAKE_COMMAND} -E cat

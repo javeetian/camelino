@@ -54,7 +54,11 @@ enum caml_instructions {
     GETGLOBALFIELD, PUSHGETGLOBALFIELD, SETGLOBAL,        /* 55–57  */
 
     /* ---- 原子常量 (P0, 预定义常量如 true/false/unit) ---- */
-    ATOM0, ATOM, PUSHATOM0, PUSHATOM,                    /* 58–61  */
+    ATOM0, ATOM_TAG, PUSHATOM0, PUSHATOM_TAG,            /* 58–61  */
+
+/* 与 Windows <windows.h> ATOM typedef 兼容 */
+#define ATOM       ATOM_TAG
+#define PUSHATOM   PUSHATOM_TAG
 
     /* ---- 堆块 (P0) ---- */
     MAKEBLOCK, MAKEBLOCK1, MAKEBLOCK2, MAKEBLOCK3, MAKEFLOATBLOCK, /* 62–66 */

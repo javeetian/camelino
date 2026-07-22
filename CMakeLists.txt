@@ -86,15 +86,19 @@ set(BINDINGS_SOURCES
 # ---- camelino-host：主机模拟器 ----
 
 if(CAMELINO_PLATFORM STREQUAL "host")
-    add_executable(camelino-host
-        ${CORE_SOURCES}
-        ${FFI_SOURCES}
-        ${REPL_SOURCES}
-        ${BINDINGS_SOURCES}
-        platform/host/port_init.c
-        platform/host/hal_adapter.c
+    # camelino-host：wrapper.c #include 所有实现（规避 MinGW collect2 问题）
+    add_custom_target(camelino_host_target  # optional, not in default (MinGW collect2)
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${CAMELINO_ROOT}/build/host_wrapper.c
+            host_wrapper.c
+        COMMAND gcc host_wrapper.c
+            -I${PLATFORM_DIR}
+            -I${CAMELINO_ROOT}/src
+            -I${CAMELINO_ROOT}/src/core
+            -std=gnu99 -Wall
+            -o camelino-host.exe
+        COMMENT "Building camelino-host (wrapper + gcc single TU)"
     )
-    target_include_directories(camelino-host PRIVATE ${COMMON_INCLUDES})
 endif()
 
 # ---- camelino-test：单元测试 ----
@@ -172,3 +176,56 @@ add_custom_target(test_vm_target ALL
     COMMENT "Building test_vm (cat+compile single TU)"
 )
 add_test(NAME test_vm COMMAND test_vm.exe)
+
+# test_bytecode
+add_custom_target(test_bytecode_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_bytecode.c
+        ${CAMELINO_ROOT}/src/core/bytecode.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_bytecode_combined.c
+    COMMAND gcc test_bytecode_combined.c
+        -I${PLATFORM_DIR}
+        -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable
+        -o test_bytecode.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_bytecode_combined.c
+    DEPENDS
+        ${CAMELINO_ROOT}/test/test_bytecode.c
+        ${CAMELINO_ROOT}/src/core/bytecode.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_bytecode (cat+compile single TU)"
+)
+add_test(NAME test_bytecode COMMAND test_bytecode.exe)
+
+# test_embed
+add_custom_target(test_embed_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_embed.c
+        ${CAMELINO_ROOT}/src/core/bytecode.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_embed_combined.c
+    COMMAND gcc test_embed_combined.c
+        -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable
+        -o test_embed.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_embed_combined.c
+    DEPENDS
+        ${CAMELINO_ROOT}/test/test_embed.c
+        ${CAMELINO_ROOT}/src/core/bytecode.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_embed"
+)
+add_test(NAME test_embed COMMAND test_embed.exe)

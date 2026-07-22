@@ -1,0 +1,17 @@
+# Camelino host build — 规避 MinGW collect2 问题
+# 用法: make -f Makefile.host
+
+CC = gcc
+CFLAGS = -Isrc -Isrc/core -Iplatform/host -std=gnu99 -Wall
+TARGET = build/camelino-host.exe
+
+$(TARGET): build/host_main.c
+	$(CC) $< $(CFLAGS) -o $@
+
+build/host_main.c: platform/host/port_init.c src/core/value.c src/core/memory.c src/core/error.c src/core/vm.c src/core/bytecode.c
+	cat $^ > $@
+
+clean:
+	rm -f build/host_main.c $(TARGET)
+
+.PHONY: clean

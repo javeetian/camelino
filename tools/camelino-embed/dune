@@ -1,5 +1,4 @@
 (executable
  (name main)
- (public_name camelino-embed)
- (libraries)
+ (libraries compiler-libs.bytecomp compiler-libs.common)
 )

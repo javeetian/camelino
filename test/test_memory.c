@@ -9,6 +9,10 @@
 #include "../src/core/value.h"
 #include "../src/core/memory.h"
 
+/* GC root stubs (not used by memory tests) */
+value caml_get_acc(void) { return Val_unit; }
+value caml_get_env(void) { return Val_unit; }
+
 #define TEST(name)     void name(void)
 #define RUN_TEST(name) do { printf("  %-35s", #name); name(); printf("OK\n"); } while(0)
 #define ASSERT(expr)   assert(expr)

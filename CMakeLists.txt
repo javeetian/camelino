@@ -288,3 +288,20 @@ add_custom_target(test_globals_target ALL
     COMMENT "Building test_globals"
 )
 add_test(NAME test_globals COMMAND test_globals.exe)
+
+# test_gc
+add_custom_target(test_gc_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_gc.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_gc_combined.c
+    COMMAND gcc test_gc_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable -Wno-unused-function
+        -o test_gc.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_gc_combined.c
+    COMMENT "Building test_gc"
+)
+add_test(NAME test_gc COMMAND test_gc.exe)

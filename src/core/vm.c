@@ -551,6 +551,8 @@ void caml_interpret(void) {
 
 value caml_get_acc(void)       { return accu; }
 void  caml_set_acc(value v)    { accu = v; }
+value caml_get_env(void)       { return env; }
+value* caml_get_trap_ptr(void) { return trap; }
 value caml_get_sp(mlsize_t s)  { return caml_stack_pointer()[s]; }
 value caml_get_global(mlsize_t slot) { return caml_global_get(slot); }
 void  caml_set_global(mlsize_t slot, value v) { caml_global_set(slot, v); }

@@ -38,4 +38,7 @@ void  caml_global_set(mlsize_t slot, value v);
 size_t caml_heap_used(void);
 size_t caml_heap_total(void);
 
+/* GC */
+void caml_gc_collect(void);
+
 #endif

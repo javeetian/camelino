@@ -16,6 +16,10 @@
 
 void caml_vm_init(void);
 
+/* 一站式启动与全局变量初始化 */
+void caml_startup(const uint8_t* code, size_t code_size);
+void caml_init_globals(void);
+
 /* 加载字节码到 VM */
 void caml_load_bytecode_buf(const uint8_t* code, size_t code_size,
                              const uint8_t* data, size_t data_size);

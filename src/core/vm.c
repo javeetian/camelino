@@ -48,6 +48,18 @@ void caml_vm_init(void) {
     yield_counter = YIELD_INTERVAL;
 }
 
+void caml_startup(const uint8_t* code, size_t code_size) {
+    caml_vm_init();
+    caml_load_bytecode_buf(code, code_size, NULL, 0);
+    caml_init_globals();
+}
+
+void caml_init_globals(void) {
+    /* Phase 2 stub: global data is pre-initialized by camelino-embed.
+       For simple programs, SETGLOBAL in the bytecode handles initialization.
+       For multi-CU programs, this iterates CU init code. */
+}
+
 void caml_load_bytecode_buf(const uint8_t* code, size_t code_size,
                              const uint8_t* data, size_t data_size) {
     (void)data; (void)data_size;
@@ -271,6 +283,194 @@ void caml_interpret(void) {
             break;
         }
 
+        /* ========== 函数调用 (Phase 2) ========== */
+
+        case PUSH_RETADDR: {
+            int32_t ret_offset = CAML_READ_INT32(pc);
+            pc += 4;
+            caml_stack_push(Val_long(extra_args));
+            caml_stack_push(env);
+            caml_stack_push((value)(uintptr_t)(pc + ret_offset));
+            NEXT();
+            break;
+        }
+
+        case APPLY: {
+            uint8_t nargs = NEXT_U8();
+            value clos = accu;
+            value saved_env = env;
+            env = clos;
+            extra_args = (int)nargs - 1;
+            caml_stack_push(Val_long(extra_args));
+            caml_stack_push(saved_env);
+            caml_stack_push((value)(uintptr_t)pc);
+            size_t off = (size_t)Long_val(Field(clos, 0));
+            if (off < (size_t)(code_end - code_start))
+                pc = code_start + off;
+            else
+                pc = code_start;
+            NEXT();
+            break;
+        }
+
+        case APPLY1: {
+            value clos = accu;
+            value saved_env = env;
+            env = clos;
+            extra_args = 0;
+            caml_stack_push(Val_long(0));
+            caml_stack_push(saved_env);
+            caml_stack_push((value)(uintptr_t)pc);
+            size_t off = (size_t)Long_val(Field(clos, 0));
+            if (off < (size_t)(code_end - code_start))
+                pc = code_start + off;
+            else
+                pc = code_start;
+            NEXT();
+            break;
+        }
+
+        case APPLY2: {
+            value clos = accu;
+            value saved_env = env;
+            env = clos;
+            extra_args = 1;
+            caml_stack_push(Val_long(1));
+            caml_stack_push(saved_env);
+            caml_stack_push((value)(uintptr_t)pc);
+            size_t off = (size_t)Long_val(Field(clos, 0));
+            if (off < (size_t)(code_end - code_start))
+                pc = code_start + off;
+            else
+                pc = code_start;
+            NEXT();
+            break;
+        }
+
+        case APPLY3: {
+            value clos = accu;
+            value saved_env = env;
+            env = clos;
+            extra_args = 2;
+            caml_stack_push(Val_long(2));
+            caml_stack_push(saved_env);
+            caml_stack_push((value)(uintptr_t)pc);
+            size_t off = (size_t)Long_val(Field(clos, 0));
+            if (off < (size_t)(code_end - code_start))
+                pc = code_start + off;
+            else
+                pc = code_start;
+            NEXT();
+            break;
+        }
+
+        case GRAB: {
+            uint8_t required = NEXT_U8();
+            if (extra_args >= required) {
+                /* enough args, continue */
+            } else {
+                /* not enough args: create partial application (Phase 2.3+) */
+                /* For now, fatal if insufficient */
+                halted = 1; return;
+            }
+            NEXT();
+            break;
+        }
+
+        case RETURN: {
+            uint8_t n = NEXT_U8();
+            value saved_pc    = caml_stack_pop();
+            value saved_env   = caml_stack_pop();
+            value saved_extra = caml_stack_pop();
+            extra_args = (int)Long_val(saved_extra);
+            env = saved_env;
+            pc = (const uint8_t*)(uintptr_t)saved_pc;
+            while (n--) caml_stack_pop();
+            NEXT();
+            break;
+        }
+
+        case RESTART: {
+            /* Reorganize stack for multi-arg application */
+            /* Phase 2.3: implement full RESTART */
+            NEXT();
+            break;
+        }
+
+        case APPTERM:
+        case APPTERM1:
+        case APPTERM2:
+        case APPTERM3: {
+            /* Tail call: Phase 2.3 */
+            halted = 1; return;
+        }
+
+        case CLOSURE: {
+            /* 4.14 closure: field0=code_ptr, field1=closinfo, field2..=free vars */
+            int32_t code_off = CAML_READ_INT32(pc);
+            pc += 4;
+            mlsize_t nvars = NEXT_U8();
+            /* closinfo: tagged arity from the bytecode */
+            uint8_t arity = NEXT_U8();
+            value clos = caml_alloc(2 + nvars, Closure_tag);  /* 2 + nvars fields */
+            Field(clos, 0) = Val_long(code_off);
+            Field(clos, 1) = Val_long((intptr_t)arity);       /* closinfo = tagged arity */
+            for (mlsize_t i = 0; i < nvars; i++) {
+                Field(clos, 2 + i) = caml_stack_pop();
+            }
+            accu = clos;
+            NEXT();
+            break;
+        }
+
+        case CLOSUREREC: {
+            /* Recursive closure: Phase 2.3 */
+            halted = 1; return;
+        }
+
+        /* ========== 异常 (Phase 2.3) ========== */
+
+        case PUSHTRAP: {
+            int32_t off = CAML_READ_INT32(pc); pc += 4;
+            caml_stack_push(accu);
+            caml_stack_push(Val_long(extra_args));
+            caml_stack_push(env);
+            caml_stack_push((value)(uintptr_t)(pc + off));
+            trap = caml_stack_pointer();  /* points to handler_pc slot */
+            NEXT(); break;
+        }
+
+        case POPTRAP: {
+            /* skip 4 slots back to where trap was pushed */
+            value* sp = caml_stack_pointer();
+            accu       = sp[3];  /* restored accu */
+            extra_args = (int)Long_val(sp[2]);
+            env        = sp[1];
+            (void)sp[0];        /* discard handler_pc */
+            /* pop 4 slots */
+            caml_stack_pop(); caml_stack_pop(); caml_stack_pop(); caml_stack_pop();
+            trap = NULL;  /* no more trap */
+            NEXT(); break;
+        }
+
+        case RAISE:
+        case RAISE_NOTRACE: {
+            if (trap == NULL) { halted = 1; return; }
+            /* trap points to handler_pc on the stack */
+            value* tr = trap;
+            pc        = (const uint8_t*)(uintptr_t)tr[0];  /* handler_pc */
+            env       = tr[1];
+            extra_args = (int)Long_val(tr[2]);
+            /* accu KEEPS current value (the exception) — do NOT restore tr[3] */
+            /* unwind the stack: pop everything down to trap frame */
+            value* sp = caml_stack_pointer();
+            while (sp > tr) { caml_stack_pop(); sp = caml_stack_pointer(); }
+            /* pop the 4 trap slots */
+            caml_stack_pop(); caml_stack_pop(); caml_stack_pop(); caml_stack_pop();
+            trap = NULL;  /* trap consumed */
+            NEXT(); break;
+        }
+
         /* ========== 控制 (P0) ========== */
 
         case STOP:
@@ -287,6 +487,29 @@ void caml_interpret(void) {
         case SETGLOBAL: {
             uint32_t slot = NEXT_U32();
             caml_global_set((mlsize_t)slot, accu);
+            NEXT();
+            break;
+        }
+        case GETGLOBALFIELD: {
+            uint32_t slot = NEXT_U32();
+            uint8_t  idx  = NEXT_U8();
+            value g = caml_global_get((mlsize_t)slot);
+            accu = Field(g, (mlsize_t)idx);
+            NEXT();
+            break;
+        }
+        case PUSHGETGLOBAL: {
+            uint32_t slot = NEXT_U32();
+            caml_stack_push(accu);          /* save current acc */
+            accu = caml_global_get((mlsize_t)slot);
+            break;
+        }
+        case PUSHGETGLOBALFIELD: {
+            uint32_t slot = NEXT_U32();
+            uint8_t  idx  = NEXT_U8();
+            value g = caml_global_get((mlsize_t)slot);
+            caml_stack_push(accu);
+            accu = Field(g, (mlsize_t)idx);
             NEXT();
             break;
         }

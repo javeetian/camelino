@@ -229,3 +229,62 @@ add_custom_target(test_embed_target ALL
     COMMENT "Building test_embed"
 )
 add_test(NAME test_embed COMMAND test_embed.exe)
+
+# test_calls
+add_custom_target(test_calls_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_calls.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_calls_combined.c
+    COMMAND gcc test_calls_combined.c
+        -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable
+        -o test_calls.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_calls_combined.c
+    DEPENDS
+        ${CAMELINO_ROOT}/test/test_calls.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_calls"
+)
+add_test(NAME test_calls COMMAND test_calls.exe)
+
+# test_exn
+add_custom_target(test_exn_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_exn.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_exn_combined.c
+    COMMAND gcc test_exn_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable -o test_exn.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_exn_combined.c
+    DEPENDS ${CAMELINO_ROOT}/test/test_exn.c
+        ${CAMELINO_ROOT}/src/core/vm.c ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c ${CAMELINO_ROOT}/src/core/error.c
+    COMMENT "Building test_exn"
+)
+add_test(NAME test_exn COMMAND test_exn.exe)
+
+# test_globals
+add_custom_target(test_globals_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_globals.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        > test_globals_combined.c
+    COMMAND gcc test_globals_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable -o test_globals.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_globals_combined.c
+    COMMENT "Building test_globals"
+)
+add_test(NAME test_globals COMMAND test_globals.exe)

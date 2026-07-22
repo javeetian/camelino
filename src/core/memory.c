@@ -5,6 +5,7 @@
 #include "memory.h"
 #include "value.h"
 #include "error.h"
+#include "gc_roots.h"
 #include <stddef.h>
 
 /* ---- 静态内存池 ---- */
@@ -90,6 +91,8 @@ static void gc_mark_roots(void) {
     /* Registers */
     gc_mark_value(caml_get_acc());
     gc_mark_value(caml_get_env());
+    /* C root registrations (CAMLparam macros) */
+    caml_gc_scan_roots(gc_mark_value);
 }
 
 /* ---- GC sweep ---- */

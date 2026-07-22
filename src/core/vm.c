@@ -12,6 +12,12 @@
 #include "opcodes.h"
 #include <string.h>
 
+/* FFI 调度 (ffi.c) */
+typedef value (*caml_prim_t)(value);
+typedef value (*caml_prim2_t)(value, value);
+typedef value (*caml_prim3_t)(value, value, value);
+extern void* caml_lookup_primitive_by_index(int index, int* arity);
+
 /* ---- 全局 VM 状态 ---- */
 
 static const uint8_t* code_start = NULL;   /* 字节码起始 */
@@ -27,9 +33,18 @@ static int    yield_counter = 0;           /* 指令计数，安全点 */
 
 #define YIELD_INTERVAL 1000
 
-/* primitive 表（Phase 4 实现） */
-static value   prim_table_null(value a) { (void)a; return Val_unit; }
-static value (*prim_table[256])(value) = { [0 ... 255] = prim_table_null };
+/* ---- C_CALL* 调度 ---- */
+static value prim_dispatch(int idx, value* args, int nargs) {
+    int arity; caml_prim_t f = (caml_prim_t)caml_lookup_primitive_by_index(idx, &arity);
+    if (!f) return Val_unit;
+    switch (nargs) {
+        case 0: return f(Val_unit);
+        case 1: return f(args[0]);
+        case 2: return ((caml_prim2_t)f)(args[0], args[1]);
+        case 3: return ((caml_prim3_t)f)(args[0], args[1], args[2]);
+        default: return Val_unit;
+    }
+}
 
 /* ---- 辅助宏 ---- */
 
@@ -477,6 +492,42 @@ void caml_interpret(void) {
             halted = 1;
             return;
 
+        /* ========== C primitive 调用 (Phase 4) ========== */
+
+        case C_CALL1: {
+            int idx = (int)NEXT_U32();
+            value a = caml_stack_pop();
+            accu = prim_dispatch(idx, &a, 1);
+            NEXT(); break;
+        }
+        case C_CALL2: {
+            int idx = (int)NEXT_U32();
+            value a2 = caml_stack_pop(), a1 = caml_stack_pop();
+            value args[2] = { a1, a2 };
+            accu = prim_dispatch(idx, args, 2);
+            NEXT(); break;
+        }
+        case C_CALL3: {
+            int idx = (int)NEXT_U32();
+            value a3 = caml_stack_pop(), a2 = caml_stack_pop(), a1 = caml_stack_pop();
+            value args[3] = { a1, a2, a3 };
+            accu = prim_dispatch(idx, args, 3);
+            NEXT(); break;
+        }
+        case C_CALL4:
+        case C_CALL5:
+        case C_CALLN: {
+            int idx = (int)NEXT_U32();
+            int n = NEXT_U8(); /* nargs for C_CALLN */
+            value args[8] = { Val_unit };
+            for (int i = n-1; i >= 0; i--) args[i] = caml_stack_pop();
+            accu = prim_dispatch(idx, args, n);
+            NEXT(); break;
+        }
+        case CHECK_SIGNALS:
+            /* no-op on embedded */
+            NEXT(); break;
+
         /* ========== 全局变量 (P0) ========== */
 
         case GETGLOBAL: {
@@ -557,3 +608,45 @@ value caml_get_sp(mlsize_t s)  { return caml_stack_pointer()[s]; }
 value caml_get_global(mlsize_t slot) { return caml_global_get(slot); }
 void  caml_set_global(mlsize_t slot, value v) { caml_global_set(slot, v); }
 int   caml_vm_halted(void)     { return halted; }
+
+/* ---- C → OCaml 回调 (4.5) ---- */
+
+value caml_callback(value closure, value arg) {
+    value saved_env = env;
+    value saved_acc = accu;
+    int  saved_ea  = extra_args;
+
+    /* Push arg + return frame, call closure */
+    caml_stack_push(arg);
+    env = closure;
+    extra_args = 0;
+    caml_stack_push(Val_long(0));
+    caml_stack_push(saved_env);
+    caml_stack_push((value)(uintptr_t)pc);
+
+    /* Update pc to closure code */
+    size_t off = (size_t)Long_val(Field(closure, 0));
+    if (off < (size_t)(code_end - code_start))
+        pc = code_start + off;
+
+    /* Run until RETURN restores pc to saved value */
+    caml_interpret();
+
+    value result = accu;
+    accu = saved_acc;
+    env = saved_env;
+    extra_args = saved_ea;
+    return result;
+}
+
+value caml_callback2(value closure, value a1, value a2) {
+    caml_stack_push(a1);
+    caml_stack_push(a2);
+    return caml_callback(closure, a2);
+}
+
+/* ---- 事件处理 / yield (4.6) ---- */
+
+void caml_process_events(void) {
+    /* Phase 4: 轮询 ISR flag，当前 stub */
+}

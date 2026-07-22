@@ -305,3 +305,53 @@ add_custom_target(test_gc_target ALL
     COMMENT "Building test_gc"
 )
 add_test(NAME test_gc COMMAND test_gc.exe)
+
+# test_ffi
+add_custom_target(test_ffi_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_ffi.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/ffi/ffi.c
+        > test_ffi_combined.c
+    COMMAND gcc test_ffi_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
+        -std=gnu99 -Wall -Wno-unused-variable -o test_ffi.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_ffi_combined.c
+    COMMENT "Building test_ffi"
+)
+add_test(NAME test_ffi COMMAND test_ffi.exe)
+
+# test_phase4 (4.4-4.10 integration)
+add_custom_target(test_phase4_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_phase4.c
+        ${CAMELINO_ROOT}/src/core/vm.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/ffi/ffi.c
+        > test_phase4_combined.c
+    COMMAND gcc test_phase4_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
+        -std=gnu99 -Wall -Wno-unused-variable -o test_phase4.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_phase4_combined.c
+    COMMENT "Building test_phase4"
+)
+add_test(NAME test_phase4 COMMAND test_phase4.exe)
+
+# test_gc_roots
+add_custom_target(test_gc_roots_target ALL
+    COMMAND ${CMAKE_COMMAND} -E cat
+        ${CAMELINO_ROOT}/test/test_gc_roots.c
+        ${CAMELINO_ROOT}/src/core/memory.c
+        ${CAMELINO_ROOT}/src/core/value.c
+        ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
+        > test_gc_roots_combined.c
+    COMMAND gcc test_gc_roots_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+        -std=gnu99 -Wall -Wno-unused-variable -o test_gc_roots.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_gc_roots_combined.c
+    COMMENT "Building test_gc_roots"
+)
+add_test(NAME test_gc_roots COMMAND test_gc_roots.exe)

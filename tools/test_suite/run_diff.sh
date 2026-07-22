@@ -1,10 +1,7 @@
 #!/bin/bash
-# ============================================================
 # Camelino 差分测试 (Phase 1)
-# 用法：cd tools/test_suite && bash run_diff.sh
-# ============================================================
 set -o pipefail
-ROOT="$(cd ../.. && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PASS=0; FAIL=0
 echo "=== Camelino Differential Tests (Phase 1) ==="
 echo ""

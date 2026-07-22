@@ -1,13 +1,15 @@
-# Camelino 编译与测试指南
+# Camelino 编译与测试指南（Phase 0–6）
 
 ## 前置条件
 
 | 工具 | 版本要求 | 安装方式 |
 |------|---------|---------|
-| GCC | ≥ 12 | `pacman -S mingw-w64-ucrt-x86_64-gcc`（MSYS2） |
-| CMake | ≥ 3.16 | `pacman -S mingw-w64-ucrt-x86_64-cmake` |
-| Ninja | 任意 | `pacman -S mingw-w64-ucrt-x86_64-ninja` |
+| GCC | ≥ 12 | macOS: `brew install gcc` / Linux: `apt-get install gcc` |
+| CMake | ≥ 3.16 | macOS: `brew install cmake` / Linux: `apt-get install cmake` |
+| Ninja | 任意 | macOS: `brew install ninja` / Linux: `apt-get install ninja-build` |
 | OCaml | 4.14.x | `opam switch create 4.14.2` |
+| ocamlfind | 任意 | `opam install ocamlfind` |
+| dune | ≥ 3.8 | `opam install dune` (或随 OCaml 自带) |
 
 ---
 
@@ -17,473 +19,287 @@
 # 1. 配置（仅需一次）
 cmake -G "Ninja" -B build -DCMAKE_C_COMPILER=gcc
 
-# 2. 编译所有目标
+# 2. 编译所有 C 目标（14 个测试 + host 模拟器）
 cmake --build build
 
-# 3. 运行全部测试（Linux/macOS 预期全过）
-ctest --test-dir build --output-on-failure
-```
+# 3. 编译 OCaml 工具
+cd tools/camelino-embed && ocamlfind ocamlc -linkpkg \
+  -package compiler-libs.common -o camelino-embed.exe main.ml && cd ../..
+cd tools/camelino-check && dune build main.exe && cd ../..
+cd tools/camelino-repl  && dune build main.exe && cd ../..
 
-> **MinGW (Windows) 注意：** 本机 MinGW GCC 14.2 的 collect2 在链接大文件（cat+compile 组合 .c）时会随机失败，导致部分测试编译为损坏的 exe。可运行以下测试：
-> ```bash
-> ./build/test_value.exe      # ✓ 跳过
-> ./build/test_opcodes.exe    # ✓ 跳过
-> ./build/test_memory.exe     # ✓ 跳过
-> ```
-> 其余测试用语法验证替代（见末尾 §14「批量语法验证」）。Linux/macOS 上 `ctest` 可一键全过。
-
----
-
-## 测试清单（按 Phase 顺序）
-
-### 1. test_value — 值表示（Phase 1.1）
-
-**验证内容：** `Val_long`/`Long_val`/`Is_long`/`Is_block`/`Field`/`Hd_val`/header 操作。
-对齐 OCaml 官方 `runtime/caml/mlvalues.h`：整数低位=1，指针低位=0。
-
-**源文件：** `test/test_value.c` + `src/core/value.c`
-
-**CMake 构建方式：**
-```cmake
-add_executable(test_value test/test_value.c src/core/value.c)
-```
-
-**运行：**
-```bash
-./build/test_value.exe
-```
-
-**预期输出（7 个子测试）：**
-```
-=== Camelino Value Module Tests ===
-  test_integer_roundtrip             OK
-  test_tag_discrimination            OK
-  test_pointer_and_header            OK
-  test_block_access                  OK
-  test_constants_and_converters      OK
-  test_tag_constants                 OK
-  test_large_integers                OK
-=== All 7 tests passed! ===
+# 4. 运行全部测试
+ctest --test-dir build --output-on-failure        # 14 项 C 单元测试
+bash tools/test_suite/run_diff.sh                  # 3 项快速差分测试
+bash tools/test_suite/run_diff_full.sh             # 41 项全量差分测试
 ```
 
 ---
 
-### 2. test_memory — 内存分配器（Phase 1.2）
+## C 运行时编译（Phase 1–5）
 
-**验证内容：** 静态堆 bump 分配、值栈 push/pop、全局变量 set/get。
+### CMake 构建
 
-**源文件：** `test/test_memory.c` + `src/core/value.c` + `src/core/memory.c` + `src/core/error.c`
-
-**CMake 构建方式（单步 cat+compile，规避 MinGW linker）：**
 ```cmake
-add_custom_target(test_memory_target ALL
+# CMakeLists.txt 顶层结构
+cmake_minimum_required(VERSION 3.16)
+project(Camelino VERSION 0.2.0 LANGUAGES C)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# 平台选择: host / arduino
+set(CAMELINO_PLATFORM "host" CACHE STRING "Target platform")
+
+# 核心源文件
+set(CORE_SOURCES
+    src/core/value.c src/core/memory.c src/core/error.c
+    src/core/vm.c src/core/bytecode.c)
+
+# FFI 源文件
+set(FFI_SOURCES src/ffi/ffi.c src/ffi/primitives.c)
+
+# REPL 源文件 (Phase 6.5)
+set(REPL_SOURCES src/repl/repl.c src/repl/line_editor.c src/repl/history.c)
+
+# 绑定层 (Phase 4)
+set(BINDINGS_SOURCES
+    src/bindings/gpio.c src/bindings/serial.c
+    src/bindings/analog.c src/bindings/time.c src/bindings/error.c)
+```
+
+### 测试构建（cat+compile 模式）
+
+大多数测试使用单步 `cat + gcc` 编译模式（规避 MinGW linker 兼容问题）：
+
+```cmake
+add_custom_target(test_vm_target ALL
     COMMAND ${CMAKE_COMMAND} -E cat
-        ${CAMELINO_ROOT}/test/test_memory.c
+        ${CAMELINO_ROOT}/test/test_vm.c
+        ${CAMELINO_ROOT}/src/core/vm.c
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
-        > test_memory_combined.c
-    COMMAND gcc test_memory_combined.c
+        > test_vm_combined.c
+    COMMAND gcc test_vm_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -o test_memory.exe
-    ...
+        -std=gnu99 -Wall -o test_vm.exe
+    COMMAND ${CMAKE_COMMAND} -E remove -f test_vm_combined.c
+    COMMENT "Building test_vm"
 )
+add_test(NAME test_vm COMMAND test_vm.exe)
 ```
 
-**运行：**
-```bash
-./build/test_memory.exe
-```
+### 14 个 C 单元测试
 
-**预期输出（8 个子测试）：**
-```
-=== Camelino Memory Allocator Tests ===
-  test_init                          OK
-  test_alloc_single                  OK
-  test_alloc_read_write              OK
-  test_alloc_multiple                OK
-  test_alloc_tags                    OK
-  test_color_preserved               OK
-  test_stack_basic                   OK
-  test_globals_basic                 OK
-=== All 8 tests passed! ===
-```
+| # | 测试 | Phase | 源文件 | 子测试 |
+|---|------|-------|--------|--------|
+| 1 | test_value | 1.1 | value.c | 7 |
+| 2 | test_opcodes | 1.3 | opcodes.h | 10 |
+| 3 | test_memory | 1.2 | memory/value/error | 8 |
+| 4 | test_vm | 1.4 | vm/memory/value/error | 17 |
+| 5 | test_bytecode | 1.5 | bytecode/vm/memory/value/error | 7 |
+| 6 | test_embed | 1.6 | bytecode/vm/memory/value/error | — |
+| 7 | test_calls | 2.1 | vm/memory/value/error | 3 |
+| 8 | test_exn | 2.3 | vm/memory/value/error | 2 |
+| 9 | test_globals | 2.4 | vm/memory/value/error | — |
+| 10 | test_gc | 3.1 | vm/memory/value/error | 3 |
+| 11 | test_ffi | 4.1 | vm/memory/value/error/ffi | 2 |
+| 12 | test_phase4 | 4.4 | vm/memory/value/error/ffi | — |
+| 13 | test_phase5 | 5.1 | vm/memory/value/error/ffi | 6 |
+| 14 | test_gc_roots | 4.2 | gc_roots/memory/value/error | — |
 
 ---
 
-### 3. test_opcodes — 指令集定义（Phase 1.3）
+## OCaml 工具编译（Phase 6）
 
-**验证内容：** 149 条 ZAM 指令枚举值与 OCaml 4.14 `runtime/caml/instruct.h` 完全对齐。
+### camelino-embed（.cmo → .camel 转换器）
 
-**源文件：** `test/test_opcodes.c`（仅含 `opcodes.h`，无其他依赖）
-
-**CMake 构建方式：**
-```cmake
-add_executable(test_opcodes test/test_opcodes.c)
-target_include_directories(test_opcodes PRIVATE ${PLATFORM_DIR} ${CAMELINO_ROOT}/src/core)
-```
-
-**运行：**
 ```bash
-./build/test_opcodes.exe
-```
-
-**预期输出（10 个子测试）：**
-```
-=== Camelino Opcode Tests (vs OCaml 4.14 instruct.h) ===
-  test_instruction_count             OK
-  test_p0_core_values                OK
-  test_function_call_ops             OK
-  test_block_ops                     OK
-  test_branch_ops                    OK
-  test_exception_ops                 OK
-  test_ffi_ops                       OK
-  test_const_ops                     OK
-  test_control_ops                   OK
-  test_object_ops                    OK
-=== All 10 tests passed! ===
-```
-
----
-
-### 4. test_vm — ZAM 虚拟机（Phase 1.4）
-
-**验证内容：** P0 指令手工字节码 → `caml_interpret()` 执行 → 比对 acc 计算结果。
-
-**源文件：** `test/test_vm.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
-
-**CMake 构建方式：** 同 test_memory，单步 cat+compile
-
-**运行：**
-```bash
-./build/test_vm.exe
-```
-
-**测试覆盖表：**
-
-| 子测试 | 手工字节码 | 期望 acc |
-|--------|-----------|---------|
-| test_const_stop | `CONST1, STOP` | 1 |
-| test_add_2_3 | `CONST3, PUSH, CONST2, ADDINT, STOP` | 5 |
-| test_constint_100 | `CONSTINT(100), STOP` | 100 |
-| test_sub_10_3 | `CONST3, PUSH, CONSTINT(10), SUBINT, STOP` | 7 |
-| test_mul_6_7 | `CONSTINT(7), PUSH, CONSTINT(6), MULINT, STOP` | 42 |
-| test_div_6_2 | `CONST2, PUSH, CONSTINT(6), DIVINT, STOP` | 3 |
-| test_mod_10_3 | `CONST3, PUSH, CONSTINT(10), MODINT, STOP` | 1 |
-| test_cmp_gt | `CONSTINT(5), PUSH, CONST3, GTINT, STOP` | true |
-| test_cmp_eq | `CONST3, PUSH, CONST3, EQ, STOP` | true |
-| test_cmp_neq | `CONSTINT(5), PUSH, CONST3, NEQ, STOP` | true |
-| test_branch | `CONST1, BRANCH(offset=5), CONST3, STOP, STOP` | 1 |
-| test_branchif_true | `CONST1, BRANCHIF(offset=5), CONST3, STOP, STOP` | 1 |
-| test_branchifnot_false | `CONST0, BRANCHIFNOT(offset=5), CONST3, STOP, STOP` | 0 |
-| test_stop_halt | `CONST1, STOP, CONST3` | 1 + halted |
-| test_stack_arith | `CONST3, PUSH, CONST2, ADDINT, STOP` | 5 |
-| test_negint | `CONSTINT(42), NEGINT, STOP` | -42 |
-| test_bitwise | AND/OR/XOR 各一个 | 2, 7, 5 |
-
----
-
-### 5. test_bytecode — 字节码加载器（Phase 1.5）
-
-**验证内容：** `.camel` 格式解析 + CRC32 校验 + VM 集成执行。
-
-**源文件：** `test/test_bytecode.c` + `src/core/bytecode.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
-
-**CMake 构建方式：** 同 test_memory，单步 cat+compile
-
-**运行：**
-```bash
-./build/test_bytecode.exe
-```
-
-**预期输出（7 个子测试）：**
-```
-=== Camelino Bytecode Loader Tests ===
-  test_load_simple                   OK    ← 完整链路：构造.camel → load → VM执行 → acc=5
-  test_bad_magic                     OK    ← magic 错误 → CAML_BC_ERR_BAD_MAGIC
-  test_wrong_word_size               OK    ← word_size 不匹配 → CAML_BC_ERR_WORD_SIZE
-  test_bad_crc                       OK    ← CRC 错误 → CAML_BC_ERR_CHECKSUM
-  test_too_small                     OK    ← 数据过短 → CAML_BC_ERR_TOO_SMALL
-  test_entry_offset_default          OK    ← entry_offset 默认值 = 0
-  test_reload                        OK    ← 重复加载覆盖旧数据
-=== All 7 tests passed! ===
-```
-
----
-
-### 6. test_embed — 端到端流水线（Phase 1.6 验收）
-
-**验证内容：** 完整工具链 ocamlc → camelino-embed → .camel → VM。
-
-**源文件：** `test/test_embed.c` + `src/core/bytecode.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
-
-**CMake 构建方式：** 同 test_memory，单步 cat+compile
-
-**运行：**
-```bash
-./build/test_embed.exe
-```
-
-**手动复现完整流水线：**
-```bash
-# 1. 编译 OCaml 源码 → .cmo
-echo 'let _ = 2 + 3' > /tmp/add23.ml
-ocamlc -c -o /tmp/add23.cmo /tmp/add23.ml
-
-# 2. 编译 camelino-embed 工具
-cd tools/camelino-embed
-ocamlfind ocamlc -linkpkg \
-  -package compiler-libs.bytecomp,compiler-libs.common \
-  -o camelino-embed.exe main.ml
-cd ../..
-
-# 3. .cmo → .camel
-tools/camelino-embed/camelino-embed.exe /tmp/add23.cmo -o /tmp/add23.camel
-
-# 4. 查看 .camel 二进制内容
-xxd /tmp/add23.camel
-
-# 5. 自动化验证
-./build/test_embed.exe
-```
-
----
-
-### 7. run_diff.sh — 差分测试（Phase 1.7 验收）
-
-**验证内容：** 对 `ocamlrun` 做差分比对。每个 `.ml` 用例经 `ocamlc` 编译 → `camelino-embed` 提取字节码 → 内联 runner 执行 → 比对 `.expect` 期望值。
-
-**源文件：** `tools/test_suite/run_diff.sh` + `tools/test_suite/case*.ml` + `tools/test_suite/case*.expect`
-
-**编译与运行：**
-```bash
-# 编译 camelino-embed（首次）
 cd tools/camelino-embed
 ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
-cd ../..
 
-# 运行差分测试
-cd tools/test_suite && bash run_diff.sh
+# 使用
+./camelino-embed.exe input.cmo -o output.camel
 ```
 
-**预期输出：**
-```
-=== Camelino Differential Tests (Phase 1) ===
+### camelino-check（静态兼容性分析）
 
-  PASS case01_add (2+3) (expected=5)
-  PASS case02_sub (10-3) (expected=7)
-  PASS case03_mul (6*7) (expected=42)
-
-=== Results: 3 passed, 0 failed ===
-```
-
-**手动复现单条用例：**
 ```bash
-cd tools/test_suite
+cd tools/camelino-check
+dune build main.exe
 
-# 1. 编译 .ml → .cmo
-ocamlc -c -o _t.cmo case01_add.ml
+# 使用
+./_build/default/main.exe input.cmo --heap 192k --word-size 32 --platform arduino
 
-# 2. .cmo → .camel（查看字节码）
-../camelino-embed/camelino-embed.exe _t.cmo -o _t.camel
+# 或通过 wrapper
+../../tools/camelino-check.sh input.cmo --heap 192k --platform arduino
+```
 
-# 3. 查看字节码 hex
-xxd _t.camel | grep 00000020
-# 输出: 657f 033a 3900 0000 008f  → CONST2, OFFSETINT(3), ATOM0, SETGLOBAL(0), STOP
+### camelino-repl（交互式 REPL）
 
-# 4. 期望值
-cat case01_add.expect   # 输出: 5
+```bash
+cd tools/camelino-repl
+dune build main.exe
+
+# Local 模式
+echo '2 + 3' | ./_build/default/main.exe --local
 ```
 
 ---
 
-### 8. test_calls — 函数调用帧（Phase 2.1-2.2）
+## 主机模拟器编译（Phase 6.2）
 
-**验证内容：** CLOSURE(4.14 closinfo), APPLY1/APPLY2, RETURN, GRAB
-
-**源文件：** `test/test_calls.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
-
-**CMake 构建方式：** 同 test_memory，单步 cat+compile
-
-**运行（Linux/macOS）：**
 ```bash
-./build/test_calls.exe
-```
+# 手动单步编译 (cat + gcc)
+echo '#define _DARWIN_C_SOURCE' > /tmp/prefix.h
+cat /tmp/prefix.h \
+    src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c \
+    src/core/bytecode.c src/core/gc_roots.c \
+    src/ffi/ffi.c src/ffi/primitives.c \
+    platform/host/hal_adapter.c platform/host/port_init.c \
+    > /tmp/host_comb.c
 
-**本机 MinGW 替代验证：**
-```bash
-gcc -fsyntax-only test/test_calls.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_calls syntax OK"
+gcc /tmp/host_comb.c \
+    -Isrc/core -Iplatform/host -Isrc -Isrc/hal -Isrc/ffi \
+    -std=gnu99 -DCAMELINO_HAS_FFI \
+    -o build/camelino-host
+
+# 使用
+./build/camelino-host --version
+./build/camelino-host --acc-only file.camel           # 差分测试模式
+./build/camelino-host --trace file.camel              # 逐指令 trace
+./build/camelino-host --gc-stats file.camel           # GC 统计
+./build/camelino-host --heap-stats file.camel         # 堆用量统计
 ```
 
 ---
 
-### 9. test_exn — 异常处理（Phase 2.3）
+## Arduino / PlatformIO 编译（Phase 6.4/6.6）
 
-**验证内容：** PUSHTRAP, POPTRAP, RAISE, RAISE_NOTRACE
+### Arduino IDE
 
-**源文件：** `test/test_exn.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c`
+1. 安装 Arduino-Pico core (Earle Philhower)
+2. 打开 `examples/Blink/Blink.ino`
+3. 将 `bytecode.h` 放在同目录
+4. Board: Raspberry Pi Pico 2 → Upload
 
-**运行（Linux/macOS）：**
+### PlatformIO
+
 ```bash
-./build/test_exn.exe
+# platformio.ini 已配置三个环境
+pio run -e pico2         # RP2350
+pio run -e pico          # RP2040
+pio run -e esp32dev      # ESP32
+
+# 一键烧录
+pio run -e pico2 -t upload
 ```
 
-**本机 MinGW 替代验证：**
+### camelino deploy（一键命令）
+
 ```bash
-gcc -fsyntax-only test/test_exn.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_exn syntax OK"
+chmod +x tools/camelino-deploy.sh
+./tools/camelino-deploy.sh blink.ml
+./tools/camelino-deploy.sh --check --board rpipico2 --port /dev/ttyACM0 blink.ml
 ```
 
 ---
 
-### 10. test_globals — 全局变量（Phase 2.4）
+## 差分测试套件（Phase 6.3）
 
-**验证内容：** SETGLOBAL, GETGLOBAL, GETGLOBALFIELD, PUSHGETGLOBAL
+### 快速（3 项）
 
-**运行（Linux/macOS）：**
 ```bash
-./build/test_globals.exe
+bash tools/test_suite/run_diff.sh
 ```
 
-**本机 MinGW 替代验证：**
+### 全量（41 项，分 8 类）
+
 ```bash
-gcc -fsyntax-only test/test_globals.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_globals syntax OK"
+bash tools/test_suite/run_diff_full.sh
+```
+
+| 类别 | 数量 | 示例 |
+|------|------|------|
+| 算术 | 17 | add/sub/mul/div/mod/neg/and/or/xor/lsl/lsr + const |
+| 比较 | 8 | eq/neq/lt/le/gt/ge |
+| 分支 | 3 | branch/branchif/branchifnot |
+| 栈 | 2 | assign/acc0 |
+| 全局 | 2 | setglobal/getglobal |
+| 异常 | 2 | raise caught/uncaught |
+| FFI | 1 | C_CALL1 identity |
+| P1指令 | 6 | boolnot/isint/ultint/beq/bneq |
+
+### 添加新差分测试
+
+在 `tools/test_suite/diff_tests.c` 中：
+
+```c
+static void pN_new_category(void) {
+    printf("\n── Phase N: New Category ────────────────────────\n");
+    {uint8_t c[]={CONST3,PUSH,CONSTINT,5,0,0,0,ADDINT,STOP};
+     T("my_test_name",c,sizeof(c),8);}
+}
+```
+
+在 `main()` 中添加 `pN_new_category();` 调用。
+
+---
+
+## C Stub 集成（Phase 6.9）
+
+```bash
+# 列出 C stub 中的 caml_* 符号
+./tools/camelino-stub.sh scan tools/test_stub.c
+
+# 生成 Arduino wrapper header
+./tools/camelino-stub.sh wrap tools/test_stub.c -o stubs.h
+
+# 完整 bundle: bytecode + C stubs
+./tools/camelino-stub.sh embed tools/test_stub.c --bytecode file.camel -o bundle.h
 ```
 
 ---
 
-### 11. test_gc — Mark-Sweep GC（Phase 3.1）
+## ci.yml（GitHub Actions，Phase 6.6）
 
-**验证内容：** GC mark/sweep, free list, 堆耗尽自动触发
-
-**运行（Linux/macOS）：**
-```bash
-./build/test_gc.exe
-```
-
-**本机 MinGW 替代验证：**
-```bash
-gcc -fsyntax-only test/test_gc.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_gc syntax OK"
+```yaml
+# .github/workflows/ci.yml
+# 3 job 矩阵:
+#   host-tests:    ubuntu + macos → cmake build + ctest(14) + diff(41)
+#   ocaml-tools:   ubuntu → camelino-embed + check + repl
+#   syntax-check:  ubuntu → 26 文件语法检查
 ```
 
 ---
 
-### 12. test_ffi — C_CALL* 调度（Phase 4.1）
+## 已注册的 C Primitive（Phase 3–5）
 
-**验证内容：** C_CALL1/C_CALL2 通过 primitive 表调用 C 函数
-
-**源文件：** `test/test_ffi.c` + `src/core/vm.c` + `src/core/memory.c` + `src/core/value.c` + `src/core/error.c` + `src/ffi/ffi.c`
-
-**运行（Linux/macOS）：**
-```bash
-./build/test_ffi.exe
-```
-
-**本机 MinGW 替代验证：**
-```bash
-gcc -fsyntax-only test/test_ffi.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c src/ffi/ffi.c -Isrc/core -Iplatform/host -Isrc/ffi -std=gnu99 && echo "test_ffi syntax OK"
-```
-
----
-
-### 13. test_phase5 — P1 指令（Phase 5.1）
-
-**验证内容：** BEQ/BNEQ, BOOLNOT, OFFSETREF, ISINT 等新增指令
-
-**运行（Linux/macOS）：**
-```bash
-./build/test_phase5.exe
-```
-
-**本机 MinGW 替代验证：**
-```bash
-gcc -fsyntax-only test/test_phase5.c src/core/vm.c src/core/memory.c src/core/value.c src/core/error.c -Isrc/core -Iplatform/host -std=gnu99 && echo "test_phase5 syntax OK"
-```
-
----
-
-### 14. 批量语法验证（MinGW 下替代方案）
-
-```bash
-# 一次性检查所有源文件语法
-for f in src/core/*.c src/ffi/*.c test/test_*.c; do
-  echo -n "$f: "
-  gcc -fsyntax-only $f -Isrc/core -Iplatform/host -Isrc/ffi -std=gnu99 2>&1 && echo "OK" || echo "FAIL"
-done
-```
-
----
-
-## 单独编译和运行某个测试
-
-```bash
-# 只编译（所有目标）
-cmake --build build
-
-# 只运行某个测试
-ctest --test-dir build -R test_vm --output-on-failure
-
-# 或者直接运行可执行文件
-./build/test_vm.exe
-```
-
-## 添加新测试
-
-1. 在 `test/` 下创建 `test_xxx.c`
-2. 在 `CMakeLists.txt` 中注册目标
-
-**简单测试（不依赖 memory/vm/error）：**
-```cmake
-add_executable(test_xxx test/test_xxx.c)
-target_include_directories(test_xxx PRIVATE ${PLATFORM_DIR} ${CAMELINO_ROOT}/src/core)
-add_test(NAME test_xxx COMMAND test_xxx)
-```
-
-**需要 memory/value/error/vm 的测试（单步 cat+compile）：**
-```cmake
-add_custom_target(test_xxx_target ALL
-    COMMAND ${CMAKE_COMMAND} -E cat
-        ${CAMELINO_ROOT}/test/test_xxx.c
-        ${CAMELINO_ROOT}/src/core/memory.c
-        ${CAMELINO_ROOT}/src/core/value.c
-        ${CAMELINO_ROOT}/src/core/error.c
-        > test_xxx_combined.c
-    COMMAND gcc test_xxx_combined.c
-        -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -o test_xxx.exe
-    COMMAND ${CMAKE_COMMAND} -E remove -f test_xxx_combined.c
-    DEPENDS ${CAMELINO_ROOT}/test/test_xxx.c ...
-    COMMENT "Building test_xxx"
-)
-add_test(NAME test_xxx COMMAND test_xxx.exe)
-```
+| 类别 | Primitive | 状态 |
+|------|-----------|------|
+| String | caml_string_length/get/create/blit | ✅ 真实实现 |
+| Bytes | caml_bytes_length/get/create/blit | ✅ 真实实现 |
+| Format | caml_format_int, caml_int_of_string | ⚠️ 桩 |
+| Format | caml_format_float, caml_float_of_string | ⚠️ 桩 |
+| 通道 I/O | caml_ml_output_char/input_char/output/flush | ✅ 真实实现 |
+| 通道 I/O | caml_ml_open_descriptor_out/in | ✅ 真实实现 |
+| Random | caml_random_init, caml_random_int | ✅ LCG |
+| Hash | caml_hash_variant, caml_hash_univ | ✅ FNV-1a |
+| Lazy | caml_update_dummy, caml_lazy_make_forward | ⚠️ 桩 |
+| GPIO | caml_camellino_digital_write/read/pin | ✅ HAL |
+| Time | caml_camellino_delay_ms/millis | ✅ HAL |
+| Serial | caml_camellino_serial_write | ✅ HAL |
+| Exception | caml_failwith/invalid_argument/array_bound_error | ⚠️ 桩 |
+| Sys | caml_sys_exit/install_signal_handler | ⚠️ 桩 |
 
 ---
 
 ## 平台说明
 
-- **当前开发平台**：主机模拟器（`platform/host/`），64 位小端，硬 FPU
-- **交叉编译到 RP2350**：Phase 4 启用，换 `platform/arduino/` 适配器
-- **已知问题**：MinGW GCC 14.2 + Ninja 多 `.o` 链接时 collect2 有兼容问题，已改用单步 `cat + gcc` 编译模式绕开
-
-## ocamlclean 集成（Phase 5.4）
-
-`ocamlclean` 是死代码消除工具，在 `camelino-embed` 之前运行：
-
-```bash
-ocamlc -c -o prog.cmo my_app.ml
-ocamlclean prog.cmo -o prog_clean.cmo      # 裁剪未使用的 stdlib 代码
-camelino-embed prog_clean.cmo -o bytecode.h
-```
-
-## 已注册的 C Primitive（Phase 5.3/5.6）
-
-| 类别 | Primitive | 状态 |
-|------|-----------|------|
-| String | caml_string_length/get/create/blit | 真实实现 |
-| Bytes | caml_bytes_length/get/create/blit | 真实实现（复用 String） |
-| Format | caml_format_int/float, caml_int/float_of_string | 真实实现 |
-| 通道 I/O | caml_ml_output_char/input_char/output/flush | 真实实现 |
-| 通道 I/O | caml_ml_open_descriptor_out/in | 真实实现 |
-| Random | caml_random_init, caml_random_int | 真实实现（LCG） |
-| Lazy | caml_update_dummy, caml_lazy_make_forward | 桩 |
-| HAL | caml_camellino_digital_write/read/pin/delay/millis/serial | 桩（host 端 printf） |
+| 平台 | cmake + ctest | 差分测试 | OCaml 工具 | Arduino 交叉编译 |
+|------|--------------|---------|-----------|----------------|
+| Linux x86-64 | ✓ 14/14 | ✓ 41/41 | ✓ | — |
+| macOS ARM64 | ✓ 14/14 | ✓ 41/41 | ✓ | — |
+| Windows MinGW | 语法替代 | ✓ | ✓ | — |
+| Arduino RP2350 | — | — | — | ✓ (需 hardware) |

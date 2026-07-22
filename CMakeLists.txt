@@ -136,6 +136,7 @@ add_custom_target(test_memory_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_memory_combined.c
     COMMAND gcc test_memory_combined.c
         -I${PLATFORM_DIR}
@@ -160,6 +161,7 @@ add_custom_target(test_vm_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_vm_combined.c
     COMMAND gcc test_vm_combined.c
         -I${PLATFORM_DIR}
@@ -186,6 +188,7 @@ add_custom_target(test_bytecode_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_bytecode_combined.c
     COMMAND gcc test_bytecode_combined.c
         -I${PLATFORM_DIR}
@@ -213,6 +216,7 @@ add_custom_target(test_embed_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_embed_combined.c
     COMMAND gcc test_embed_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
@@ -238,6 +242,7 @@ add_custom_target(test_calls_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_calls_combined.c
     COMMAND gcc test_calls_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
@@ -262,6 +267,7 @@ add_custom_target(test_exn_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_exn_combined.c
     COMMAND gcc test_exn_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable -o test_exn.exe
@@ -281,6 +287,7 @@ add_custom_target(test_globals_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_globals_combined.c
     COMMAND gcc test_globals_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable -o test_globals.exe
@@ -297,6 +304,7 @@ add_custom_target(test_gc_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_gc_combined.c
     COMMAND gcc test_gc_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable -Wno-unused-function
@@ -314,10 +322,11 @@ add_custom_target(test_ffi_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_ffi_combined.c
     COMMAND gcc test_ffi_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
-        -std=gnu99 -Wall -Wno-unused-variable -o test_ffi.exe
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_ffi.exe
     COMMAND ${CMAKE_COMMAND} -E remove -f test_ffi_combined.c
     COMMENT "Building test_ffi"
 )
@@ -331,10 +340,11 @@ add_custom_target(test_phase4_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
         ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_phase4_combined.c
     COMMAND gcc test_phase4_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
-        -std=gnu99 -Wall -Wno-unused-variable -o test_phase4.exe
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase4.exe
     COMMAND ${CMAKE_COMMAND} -E remove -f test_phase4_combined.c
     COMMENT "Building test_phase4"
 )
@@ -348,8 +358,11 @@ add_custom_target(test_phase5_target ALL
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c
+        ${CAMELINO_ROOT}/src/core/gc_roots.c
+        ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_phase5_combined.c
-    COMMAND gcc test_phase5_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
+    COMMAND gcc test_phase5_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase5.exe
         -std=gnu99 -Wall -Wno-unused-variable -o test_phase5.exe
     COMMAND ${CMAKE_COMMAND} -E remove -f test_phase5_combined.c
     COMMENT "Building test_phase5"
@@ -360,6 +373,7 @@ add_test(NAME test_phase5 COMMAND test_phase5.exe)
 add_custom_target(test_gc_roots_target ALL
     COMMAND ${CMAKE_COMMAND} -E cat
         ${CAMELINO_ROOT}/test/test_gc_roots.c
+        ${CAMELINO_ROOT}/src/core/vm.c
         ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c
         ${CAMELINO_ROOT}/src/core/error.c

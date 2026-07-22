@@ -2,10 +2,8 @@
 # ============================================================
 # Camelino 差分测试 (Phase 1)
 # 用法：cd tools/test_suite && bash run_diff.sh
-#
-# 字节码由 camelino-embed 预生成并硬编码，规避 MinGW 文件 I/O 问题。
 # ============================================================
-set -e
+set -o pipefail
 ROOT="$(cd ../.. && pwd)"
 PASS=0; FAIL=0
 echo "=== Camelino Differential Tests (Phase 1) ==="
@@ -22,7 +20,7 @@ run_one() {
 #include "memory.h"
 int main(void){uint8_t b[]={$bc};caml_vm_init();caml_load_bytecode_buf(b,sizeof(b),NULL,0);caml_interpret();printf("%ld\\n",(long)Long_val(caml_get_acc()));return 0;}
 CODE
-  cat _c.c "$ROOT/src/core/vm.c" "$ROOT/src/core/memory.c" "$ROOT/src/core/value.c" "$ROOT/src/core/error.c" > _comb.c
+  cat _c.c "$ROOT/src/core/vm.c" "$ROOT/src/core/memory.c" "$ROOT/src/core/value.c" "$ROOT/src/core/error.c" "$ROOT/src/core/gc_roots.c" > _comb.c
   gcc _comb.c -I"$ROOT/src/core" -I"$ROOT/platform/host" -I"$ROOT/src" -std=gnu99 -o _r.exe 2>/dev/null
   actual=$(./_r.exe 2>/dev/null | tr -d ' \n\r')
   if [ "$actual" = "$expect" ]; then

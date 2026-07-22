@@ -96,14 +96,14 @@ static value prim_create_string(value len) {
     if (n == 0) {
         value b = caml_alloc(1, String_tag);
         uint8_t* d = (uint8_t*)b;
-        d[0] = (uint8_t)sizeof(value); /* padding = word size */
+        d[sizeof(value) - 1] = (uint8_t)sizeof(value); /* padding = word size, at end of block */
         return b;
     }
     mlsize_t words = (n + sizeof(value)) / sizeof(value);
     value b = caml_alloc(words, String_tag);
     uint8_t* d = (uint8_t*)b;
     size_t pad = words * sizeof(value) - n;
-    d[n] = (uint8_t)pad;
+    d[words * sizeof(value) - 1] = (uint8_t)pad;          /* padding at last byte of block */
     return b;
 }
 

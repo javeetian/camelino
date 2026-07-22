@@ -12,7 +12,16 @@
 typedef value (*caml_prim_t)(value);
 typedef value (*caml_prim2_t)(value, value);
 typedef value (*caml_prim3_t)(value, value, value);
+#ifdef CAMELINO_HAS_FFI
 extern void* caml_lookup_primitive_by_index(int index, int* arity);
+#else
+__attribute__((weak))
+void* caml_lookup_primitive_by_index(int index, int* arity) {
+    (void)index;
+    if (arity) *arity = 0;
+    return NULL;
+}
+#endif
 
 static const uint8_t* code_start = NULL;
 static const uint8_t* pc = NULL;

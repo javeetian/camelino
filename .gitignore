@@ -31,7 +31,6 @@ tools/camelino-embed/_build/
 
 # --- C / native test builds ---
 test/test_value
-test/test_value.exe
 test/*.o
 *.obj
 *.pdb

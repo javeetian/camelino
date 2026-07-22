@@ -25,8 +25,8 @@ cmake --build build
 # 3. 编译 OCaml 工具
 cd tools/camelino-embed && ocamlfind ocamlc -linkpkg \
   -package compiler-libs.common -o camelino-embed main.ml && cd ../..
-cd tools/camelino-check && dune build main.exe && cd ../..
-cd tools/camelino-repl  && dune build main.exe && cd ../..
+cd tools/camelino-check && dune build && cd ../..
+cd tools/camelino-repl  && dune build && cd ../..
 
 # 4. 运行全部测试
 ctest --test-dir build --output-on-failure        # 14 项 C 单元测试
@@ -127,7 +127,7 @@ ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.m
 
 ```bash
 cd tools/camelino-check
-dune build main.exe
+dune build
 
 # 使用
 ./_build/default/main.exe input.cmo --heap 192k --word-size 32 --platform arduino
@@ -140,7 +140,7 @@ dune build main.exe
 
 ```bash
 cd tools/camelino-repl
-dune build main.exe
+dune build
 
 # Local 模式
 echo '2 + 3' | ./_build/default/main.exe --local

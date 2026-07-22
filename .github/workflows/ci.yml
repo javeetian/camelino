@@ -52,17 +52,17 @@ jobs:
       - name: Build camelino-embed
         run: |
           cd tools/camelino-embed
-          opam exec -- ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
+          opam exec -- ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml
 
       - name: Build camelino-check
         run: |
           cd tools/camelino-check
-          opam exec -- dune build main.exe
+          opam exec -- dune build
 
       - name: Build camelino-repl
         run: |
           cd tools/camelino-repl
-          opam exec -- dune build main.exe
+          opam exec -- dune build
 
       - name: Test camelino-check
         run: |

@@ -7,7 +7,7 @@
  *   cmake --build build
  *
  * 运行：
- *   ./build/test_embed.exe
+ *   ./build/test_embed
  *   # 或者 ctest --test-dir build -R test_embed
  *
  * 手动复现完整流水线：
@@ -16,10 +16,10 @@
  *   3. cd tools/camelino-embed
  *      ocamlfind ocamlc -linkpkg \
  *        -package compiler-libs.bytecomp,compiler-libs.common \
- *        -o camelino-embed.exe main.ml
- *   4. ./camelino-embed.exe /tmp/add23.cmo -o /tmp/add23.camel
+ *        -o camelino-embed main.ml
+ *   4. ./camelino-embed /tmp/add23.cmo -o /tmp/add23.camel
  *   5. xxd /tmp/add23.camel   # 查看 .camel 二进制
- *   6. cd ../.. && ./build/test_embed.exe  # 自动化验证
+ *   6. cd ../.. && ./build/test_embed  # 自动化验证
  */
 #include <stdio.h>
 #include <assert.h>

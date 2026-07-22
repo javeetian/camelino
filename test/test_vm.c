@@ -6,7 +6,7 @@
  * 所有字节码以 OCaml 4.14 interp.c 的指令编码为准。
  *
  * 编译：cmake --build build
- * 运行：./build/test_vm.exe   或   ctest --test-dir build -R test_vm
+ * 运行：./build/test_vm   或   ctest --test-dir build -R test_vm
  */
 #include <stdio.h>
 #include <assert.h>

@@ -23,7 +23,7 @@ Tools → Board → Boards Manager → 搜索 "Raspberry Pi Pico" → 安装
 ```bash
 # PC 端:
 ocamlc -c -o my_app.cmo my_app.ml
-tools/camelino-embed/camelino-embed.exe my_app.cmo -o bytecode.h
+tools/camelino-embed/camelino-embed my_app.cmo -o bytecode.h
 ```
 
 ### 3. Arduino IDE 打开示例

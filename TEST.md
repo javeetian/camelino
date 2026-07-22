@@ -150,7 +150,7 @@ cd tools/test_suite && bash run_diff.sh
 
 ```bash
 # 编译
-cd tools/camelino-check && dune build main.exe && cd ../..
+cd tools/camelino-check && dune build && cd ../..
 
 # 使用
 tools/camelino-check.sh my_app.cmo --heap 192k --word-size 32 --platform arduino
@@ -200,7 +200,7 @@ gcc -fsyntax-only platform/arduino/hal_adapter.c -Isrc/core -Iplatform/host -Isr
 
 ```bash
 # 编译 PC 端 REPL 工具
-cd tools/camelino-repl && dune build main.exe && cd ../..
+cd tools/camelino-repl && dune build && cd ../..
 
 # 测试 REPL（local 模式）
 echo '2 + 3' | tools/camelino-repl/_build/default/main.exe --local
@@ -304,8 +304,8 @@ echo "Syntax: $PASS passed, $FAIL failed"
 echo ""
 echo "=== OCaml Tools ==="
 (cd tools/camelino-embed && ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml 2>/dev/null && echo "camelino-embed: OK") || echo "camelino-embed: FAIL"
-(cd tools/camelino-check && dune build main.exe 2>/dev/null && echo "camelino-check: OK") || echo "camelino-check: FAIL"
-(cd tools/camelino-repl && dune build main.exe 2>/dev/null && echo "camelino-repl: OK") || echo "camelino-repl: FAIL"
+(cd tools/camelino-check && dune build 2>/dev/null && echo "camelino-check: OK") || echo "camelino-check: FAIL"
+(cd tools/camelino-repl && dune build 2>/dev/null && echo "camelino-repl: OK") || echo "camelino-repl: FAIL"
 echo ""
 echo "=== All Done ==="
 ```

@@ -3,7 +3,7 @@
  * @brief Phase 2.4 全局变量测试
  *
  * 编译：cmake --build build
- * 运行：./build/test_globals.exe 或 ctest --test-dir build -R test_globals
+ * 运行：./build/test_globals 或 ctest --test-dir build -R test_globals
  */
 #include <stdio.h>
 #include <assert.h>

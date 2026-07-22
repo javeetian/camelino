@@ -60,13 +60,13 @@ else
     fail "camelino-embed build"
 fi
 
-if (cd tools/camelino-check && dune build main.exe 2>/dev/null); then
+if (cd tools/camelino-check && dune build 2>/dev/null); then
     pass "camelino-check build"
 else
     fail "camelino-check build"
 fi
 
-if (cd tools/camelino-repl && dune build main.exe 2>/dev/null); then
+if (cd tools/camelino-repl && dune build 2>/dev/null); then
     pass "camelino-repl build"
 else
     fail "camelino-repl build"

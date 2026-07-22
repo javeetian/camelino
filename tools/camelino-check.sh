@@ -7,7 +7,7 @@ EXE="$SCRIPT_DIR/camelino-check/_build/default/main.exe"
 
 if [ ! -f "$EXE" ]; then
     echo "Building camelino-check..."
-    cd "$SCRIPT_DIR/camelino-check" && dune build main.exe || exit 1
+    cd "$SCRIPT_DIR/camelino-check" && dune build || exit 1
 fi
 
 exec "$EXE" "$@"

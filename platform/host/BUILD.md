@@ -71,7 +71,7 @@ done
 
 ```bash
 cd tools/camelino-embed
-ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
+ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml
 cd ../..
 cd tools/test_suite && bash run_diff.sh
 ```

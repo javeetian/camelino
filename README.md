@@ -28,9 +28,8 @@ eval $(opam env)
 cmake -G "Ninja" -B build -DCMAKE_C_COMPILER=gcc
 cmake --build build
 
-# 运行测试 (14 项 C 单元测试 + 41 项差分测试)
-ctest --test-dir build --output-on-failure
-bash tools/test_suite/run_diff_full.sh
+# 运行测试 (一键全量回归)
+bash tools/test_suite/run_all.sh
 ```
 
 ### 3. 编译 OCaml 程序 → 设备
@@ -42,8 +41,8 @@ ocamlc -c -o my_app.cmo my_app.ml
 
 # 嵌入为 C 头文件
 cd tools/camelino-embed
-ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
-./camelino-embed.exe ../../my_app.cmo -o bytecode.h
+ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml
+./camelino-embed ../../my_app.cmo -o bytecode.h
 
 # Arduino IDE: #include "bytecode.h", 烧录到 RP2350
 ```
@@ -88,15 +87,20 @@ ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe ma
 ## 测试
 
 ```bash
-# 全部测试
-cmake --build build && ctest --test-dir build --output-on-failure
-bash tools/test_suite/run_diff_full.sh
+# 一键全量回归 (推荐)
+bash tools/test_suite/run_all.sh
+
+# 或分步运行
+ctest --test-dir build --output-on-failure        # 14 项 C 单元测试
+bash tools/test_suite/run_diff_full.sh             # 41 项差分测试
 
 # 单独测试
-./build/test_vm.exe       # ZAM 解释器
-./build/test_gc.exe       # 垃圾回收
-./build/test_ffi.exe      # FFI 调度
+./build/test_vm        # ZAM 解释器
+./build/test_gc        # 垃圾回收
+./build/test_ffi       # FFI 调度
 ```
+
+`run_all.sh` 覆盖：ctest(14) + 快速差分(3) + 全量差分(41) + 语法检查(31 文件) + OCaml 工具编译(3) + camelino-check 功能验证 + C stub 扫描。
 
 ## 文档
 

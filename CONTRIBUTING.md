@@ -43,9 +43,9 @@ bash tools/test_suite/run_diff_full.sh                 # 41 项差分测试
 
 # 构建 OCaml 工具
 cd tools/camelino-embed && ocamlfind ocamlc -linkpkg \
-  -package compiler-libs.common -o camelino-embed.exe main.ml
-cd tools/camelino-check && dune build main.exe
-cd tools/camelino-repl  && dune build main.exe
+  -package compiler-libs.common -o camelino-embed main.ml
+cd tools/camelino-check && dune build
+cd tools/camelino-repl  && dune build
 ```
 
 ## 代码风格

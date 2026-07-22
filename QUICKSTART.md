@@ -52,8 +52,8 @@ ocamlc -c -o add.cmo add.ml
 
 # 嵌入 → .camel
 cd tools/camelino-embed
-ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
-./camelino-embed.exe ../../add.cmo -o ../../add.camel
+ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml
+./camelino-embed ../../add.cmo -o ../../add.camel
 cd ../..
 ```
 
@@ -89,7 +89,7 @@ echo '2 + 3' | tools/camelino-repl/_build/default/main.exe --local
 ocamlc -c -o blink.cmo blink.ml
 
 # 生成 bytecode.h
-tools/camelino-embed/camelino-embed.exe blink.cmo -o bytecode.h
+tools/camelino-embed/camelino-embed blink.cmo -o bytecode.h
 
 # PlatformIO 一键编译 + 烧录
 pio run -t upload

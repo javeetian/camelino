@@ -10,7 +10,7 @@
 
 open Printf
 
-let camelino_embed = "tools/camelino-embed/camelino-embed.exe"
+let camelino_embed = "tools/camelino-embed/camelino-embed"
 let camelino_host  = "build/camelino-host"
 let temp_dir = Filename.get_temp_dir_name ()
 
@@ -112,7 +112,7 @@ let () =
   (* Check tools exist *)
   if not (Sys.file_exists camelino_embed) then begin
     eprintf "Error: camelino-embed not found at %s\n" camelino_embed;
-    eprintf "Build it first: cd tools/camelino-embed && ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml\n";
+    eprintf "Build it first: cd tools/camelino-embed && ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml\n";
     exit 1
   end;
   repl_loop ()

@@ -24,7 +24,7 @@ cmake --build build
 
 # 3. 编译 OCaml 工具
 cd tools/camelino-embed && ocamlfind ocamlc -linkpkg \
-  -package compiler-libs.common -o camelino-embed.exe main.ml && cd ../..
+  -package compiler-libs.common -o camelino-embed main.ml && cd ../..
 cd tools/camelino-check && dune build main.exe && cd ../..
 cd tools/camelino-repl  && dune build main.exe && cd ../..
 
@@ -83,11 +83,11 @@ add_custom_target(test_vm_target ALL
         > test_vm_combined.c
     COMMAND gcc test_vm_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -o test_vm.exe
+        -std=gnu99 -Wall -o test_vm
     COMMAND ${CMAKE_COMMAND} -E remove -f test_vm_combined.c
     COMMENT "Building test_vm"
 )
-add_test(NAME test_vm COMMAND test_vm.exe)
+add_test(NAME test_vm COMMAND ./test_vm)
 ```
 
 ### 14 个 C 单元测试
@@ -117,10 +117,10 @@ add_test(NAME test_vm COMMAND test_vm.exe)
 
 ```bash
 cd tools/camelino-embed
-ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml
+ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml
 
 # 使用
-./camelino-embed.exe input.cmo -o output.camel
+./camelino-embed input.cmo -o output.camel
 ```
 
 ### camelino-check（静态兼容性分析）

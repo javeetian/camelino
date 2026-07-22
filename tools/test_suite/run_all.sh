@@ -54,7 +54,7 @@ fi
 
 # ---- OCaml Tools ----
 echo ""; echo "── OCaml Tools ────────────────────────────────────"
-if (cd tools/camelino-embed && ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml 2>/dev/null); then
+if (cd tools/camelino-embed && ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml 2>/dev/null); then
     pass "camelino-embed build"
 else
     fail "camelino-embed build"

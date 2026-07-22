@@ -96,7 +96,7 @@ if(CAMELINO_PLATFORM STREQUAL "host")
             -I${CAMELINO_ROOT}/src
             -I${CAMELINO_ROOT}/src/core
             -std=gnu99 -Wall
-            -o camelino-host.exe
+            -o camelino-host
         COMMENT "Building camelino-host (wrapper + gcc single TU)"
     )
 endif()
@@ -142,7 +142,7 @@ add_custom_target(test_memory_target ALL
         -I${PLATFORM_DIR}
         -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall
-        -o test_memory.exe
+        -o test_memory
     COMMAND ${CMAKE_COMMAND} -E remove -f test_memory_combined.c
     DEPENDS
         ${CAMELINO_ROOT}/test/test_memory.c
@@ -151,7 +151,7 @@ add_custom_target(test_memory_target ALL
         ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_memory (cat+compile single TU)"
 )
-add_test(NAME test_memory COMMAND test_memory.exe)
+add_test(NAME test_memory COMMAND ./test_memory)
 
 # test_vm
 add_custom_target(test_vm_target ALL
@@ -167,7 +167,7 @@ add_custom_target(test_vm_target ALL
         -I${PLATFORM_DIR}
         -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable
-        -o test_vm.exe
+        -o test_vm
     COMMAND ${CMAKE_COMMAND} -E remove -f test_vm_combined.c
     DEPENDS
         ${CAMELINO_ROOT}/test/test_vm.c
@@ -177,7 +177,7 @@ add_custom_target(test_vm_target ALL
         ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_vm (cat+compile single TU)"
 )
-add_test(NAME test_vm COMMAND test_vm.exe)
+add_test(NAME test_vm COMMAND ./test_vm)
 
 # test_bytecode
 add_custom_target(test_bytecode_target ALL
@@ -194,7 +194,7 @@ add_custom_target(test_bytecode_target ALL
         -I${PLATFORM_DIR}
         -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable
-        -o test_bytecode.exe
+        -o test_bytecode
     COMMAND ${CMAKE_COMMAND} -E remove -f test_bytecode_combined.c
     DEPENDS
         ${CAMELINO_ROOT}/test/test_bytecode.c
@@ -205,7 +205,7 @@ add_custom_target(test_bytecode_target ALL
         ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_bytecode (cat+compile single TU)"
 )
-add_test(NAME test_bytecode COMMAND test_bytecode.exe)
+add_test(NAME test_bytecode COMMAND ./test_bytecode)
 
 # test_embed
 add_custom_target(test_embed_target ALL
@@ -221,7 +221,7 @@ add_custom_target(test_embed_target ALL
     COMMAND gcc test_embed_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable
-        -o test_embed.exe
+        -o test_embed
     COMMAND ${CMAKE_COMMAND} -E remove -f test_embed_combined.c
     DEPENDS
         ${CAMELINO_ROOT}/test/test_embed.c
@@ -232,7 +232,7 @@ add_custom_target(test_embed_target ALL
         ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_embed"
 )
-add_test(NAME test_embed COMMAND test_embed.exe)
+add_test(NAME test_embed COMMAND ./test_embed)
 
 # test_calls
 add_custom_target(test_calls_target ALL
@@ -247,7 +247,7 @@ add_custom_target(test_calls_target ALL
     COMMAND gcc test_calls_combined.c
         -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable
-        -o test_calls.exe
+        -o test_calls
     COMMAND ${CMAKE_COMMAND} -E remove -f test_calls_combined.c
     DEPENDS
         ${CAMELINO_ROOT}/test/test_calls.c
@@ -257,7 +257,7 @@ add_custom_target(test_calls_target ALL
         ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_calls"
 )
-add_test(NAME test_calls COMMAND test_calls.exe)
+add_test(NAME test_calls COMMAND ./test_calls)
 
 # test_exn
 add_custom_target(test_exn_target ALL
@@ -270,14 +270,14 @@ add_custom_target(test_exn_target ALL
         ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_exn_combined.c
     COMMAND gcc test_exn_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -Wno-unused-variable -o test_exn.exe
+        -std=gnu99 -Wall -Wno-unused-variable -o test_exn
     COMMAND ${CMAKE_COMMAND} -E remove -f test_exn_combined.c
     DEPENDS ${CAMELINO_ROOT}/test/test_exn.c
         ${CAMELINO_ROOT}/src/core/vm.c ${CAMELINO_ROOT}/src/core/memory.c
         ${CAMELINO_ROOT}/src/core/value.c ${CAMELINO_ROOT}/src/core/error.c
     COMMENT "Building test_exn"
 )
-add_test(NAME test_exn COMMAND test_exn.exe)
+add_test(NAME test_exn COMMAND ./test_exn)
 
 # test_globals
 add_custom_target(test_globals_target ALL
@@ -290,11 +290,11 @@ add_custom_target(test_globals_target ALL
         ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_globals_combined.c
     COMMAND gcc test_globals_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -Wno-unused-variable -o test_globals.exe
+        -std=gnu99 -Wall -Wno-unused-variable -o test_globals
     COMMAND ${CMAKE_COMMAND} -E remove -f test_globals_combined.c
     COMMENT "Building test_globals"
 )
-add_test(NAME test_globals COMMAND test_globals.exe)
+add_test(NAME test_globals COMMAND ./test_globals)
 
 # test_gc
 add_custom_target(test_gc_target ALL
@@ -308,11 +308,11 @@ add_custom_target(test_gc_target ALL
         > test_gc_combined.c
     COMMAND gcc test_gc_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
         -std=gnu99 -Wall -Wno-unused-variable -Wno-unused-function
-        -o test_gc.exe
+        -o test_gc
     COMMAND ${CMAKE_COMMAND} -E remove -f test_gc_combined.c
     COMMENT "Building test_gc"
 )
-add_test(NAME test_gc COMMAND test_gc.exe)
+add_test(NAME test_gc COMMAND ./test_gc)
 
 # test_ffi
 add_custom_target(test_ffi_target ALL
@@ -326,11 +326,11 @@ add_custom_target(test_ffi_target ALL
         ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_ffi_combined.c
     COMMAND gcc test_ffi_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
-        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_ffi.exe
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_ffi
     COMMAND ${CMAKE_COMMAND} -E remove -f test_ffi_combined.c
     COMMENT "Building test_ffi"
 )
-add_test(NAME test_ffi COMMAND test_ffi.exe)
+add_test(NAME test_ffi COMMAND ./test_ffi)
 
 # test_phase4 (4.4-4.10 integration)
 add_custom_target(test_phase4_target ALL
@@ -344,11 +344,11 @@ add_custom_target(test_phase4_target ALL
         ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_phase4_combined.c
     COMMAND gcc test_phase4_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
-        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase4.exe
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase4
     COMMAND ${CMAKE_COMMAND} -E remove -f test_phase4_combined.c
     COMMENT "Building test_phase4"
 )
-add_test(NAME test_phase4 COMMAND test_phase4.exe)
+add_test(NAME test_phase4 COMMAND ./test_phase4)
 
 # test_phase5
 add_custom_target(test_phase5_target ALL
@@ -362,12 +362,12 @@ add_custom_target(test_phase5_target ALL
         ${CAMELINO_ROOT}/src/ffi/ffi.c
         > test_phase5_combined.c
     COMMAND gcc test_phase5_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core -I${CAMELINO_ROOT}/src/ffi
-        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase5.exe
-        -std=gnu99 -Wall -Wno-unused-variable -o test_phase5.exe
+        -DCAMELINO_HAS_FFI -std=gnu99 -Wall -Wno-unused-variable -o test_phase5
+        -std=gnu99 -Wall -Wno-unused-variable -o test_phase5
     COMMAND ${CMAKE_COMMAND} -E remove -f test_phase5_combined.c
     COMMENT "Building test_phase5"
 )
-add_test(NAME test_phase5 COMMAND test_phase5.exe)
+add_test(NAME test_phase5 COMMAND ./test_phase5)
 
 # test_gc_roots
 add_custom_target(test_gc_roots_target ALL
@@ -380,8 +380,8 @@ add_custom_target(test_gc_roots_target ALL
         ${CAMELINO_ROOT}/src/core/gc_roots.c
         > test_gc_roots_combined.c
     COMMAND gcc test_gc_roots_combined.c -I${PLATFORM_DIR} -I${CAMELINO_ROOT}/src/core
-        -std=gnu99 -Wall -Wno-unused-variable -o test_gc_roots.exe
+        -std=gnu99 -Wall -Wno-unused-variable -o test_gc_roots
     COMMAND ${CMAKE_COMMAND} -E remove -f test_gc_roots_combined.c
     COMMENT "Building test_gc_roots"
 )
-add_test(NAME test_gc_roots COMMAND test_gc_roots.exe)
+add_test(NAME test_gc_roots COMMAND ./test_gc_roots)

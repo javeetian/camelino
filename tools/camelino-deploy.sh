@@ -35,7 +35,7 @@ INPUT_ML=""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOOLS_DIR="$PROJECT_ROOT/tools"
-EMBED="$TOOLS_DIR/camelino-embed/camelino-embed.exe"
+EMBED="$TOOLS_DIR/camelino-embed/camelino-embed"
 CHECK="$TOOLS_DIR/camelino-check/_build/default/main.exe"
 TEMP_DIR="/tmp/camelino_deploy_$$"
 
@@ -85,7 +85,7 @@ echo ""
 if [ ! -f "$EMBED" ]; then
     echo "[0/4] Building camelino-embed..."
     cd "$TOOLS_DIR/camelino-embed"
-    ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed.exe main.ml 2>/dev/null
+    ocamlfind ocamlc -linkpkg -package compiler-libs.common -o camelino-embed main.ml 2>/dev/null
     cd "$PROJECT_ROOT"
 fi
 

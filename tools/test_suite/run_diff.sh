@@ -18,14 +18,14 @@ run_one() {
 int main(void){uint8_t b[]={$bc};caml_vm_init();caml_load_bytecode_buf(b,sizeof(b),NULL,0);caml_interpret();printf("%ld\\n",(long)Long_val(caml_get_acc()));return 0;}
 CODE
   cat _c.c "$ROOT/src/core/vm.c" "$ROOT/src/core/memory.c" "$ROOT/src/core/value.c" "$ROOT/src/core/error.c" "$ROOT/src/core/gc_roots.c" > _comb.c
-  gcc _comb.c -I"$ROOT/src/core" -I"$ROOT/platform/host" -I"$ROOT/src" -std=gnu99 -o _r.exe 2>/dev/null
-  actual=$(./_r.exe 2>/dev/null | tr -d ' \n\r')
+  gcc _comb.c -I"$ROOT/src/core" -I"$ROOT/platform/host" -I"$ROOT/src" -std=gnu99 -o _r 2>/dev/null
+  actual=$(./_r 2>/dev/null | tr -d ' \n\r')
   if [ "$actual" = "$expect" ]; then
     echo "  PASS $name (expected=$expect)"; PASS=$((PASS+1))
   else
     echo "  FAIL $name (expected=$expect, actual=$actual)"; FAIL=$((FAIL+1))
   fi
-  rm -f _c.c _comb.c _r.exe
+  rm -f _c.c _comb.c _r
 }
 
 # case01: 2+3 → CONST2, OFFSETINT(3), ATOM0, SETGLOBAL(0), STOP

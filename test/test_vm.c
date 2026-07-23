@@ -116,8 +116,8 @@ TEST(test_cmp_neq) {
 /* ---- 测试 11: BRANCH 无条件跳转 ---- */
 
 TEST(test_branch) {
-    /* CONST1, BRANCH(offset=5=skip CONST3+STOP), CONST3, STOP, STOP */
-    uint8_t bc[] = { CONST1, BRANCH, 5,0,0,0, CONST3, STOP, STOP };
+    /* CONST1, BRANCH(offset=7=skip CONST3+STOP), CONST3, STOP, STOP */
+    uint8_t bc[] = { CONST1, BRANCH, 7,0,0,0, CONST3, STOP, STOP };
     /*                                        ^^^^ offset=5: skip 1+1 bytes = CONST3+deadSTOP */
     load_and_run(bc, sizeof(bc));
     ASSERT(Long_val(caml_get_acc()) == 1);  /* CONST1 path */
@@ -126,8 +126,8 @@ TEST(test_branch) {
 /* ---- 测试 12: BRANCHIF（条件为真时跳转）---- */
 
 TEST(test_branchif_true) {
-    /* CONST1(1=true), BRANCHIF(offset=5=skip CONST3+STOP), CONST3, STOP, STOP */
-    uint8_t bc[] = { CONST1, BRANCHIF, 5,0,0,0, CONST3, STOP, STOP };
+    /* CONST1(1=true), BRANCHIF(offset=7=skip CONST3+STOP), CONST3, STOP, STOP */
+    uint8_t bc[] = { CONST1, BRANCHIF, 7,0,0,0, CONST3, STOP, STOP };
     load_and_run(bc, sizeof(bc));
     ASSERT(Long_val(caml_get_acc()) == 1);  /* jumped over CONST3 */
 }
@@ -135,8 +135,8 @@ TEST(test_branchif_true) {
 /* ---- 测试 13: BRANCHIFNOT（条件为假时跳转）---- */
 
 TEST(test_branchifnot_false) {
-    /* CONST0(0=false), BRANCHIFNOT(offset=5=skip CONST3+STOP), CONST3, STOP, STOP */
-    uint8_t bc[] = { CONST0, BRANCHIFNOT, 5,0,0,0, CONST3, STOP, STOP };
+    /* CONST0(0=false), BRANCHIFNOT(offset=7=skip CONST3+STOP), CONST3, STOP, STOP */
+    uint8_t bc[] = { CONST0, BRANCHIFNOT, 7,0,0,0, CONST3, STOP, STOP };
     load_and_run(bc, sizeof(bc));
     ASSERT(Long_val(caml_get_acc()) == 0);  /* jumped over CONST3 */
 }

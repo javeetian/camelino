@@ -23,10 +23,10 @@ static void run(uint8_t* bc, size_t len) {
 
 /* Test 1: BEQ: 3==3 → jump */
 void test_beq_true(void) {
-    /* CONST3, PUSH, CONST3, BEQ(offset=6 → skip CONST0+STOP), CONST0, STOP, CONST1, STOP */
+    /* CONST3, PUSH, CONST3, BEQ(offset10→ skip CONST0+STOP), CONST0, STOP, CONST1, STOP */
     uint8_t bc[] = {
         CONST3, PUSH, CONST3,
-        BEQ, 6,0,0,0,         /* if equal → jump 6 bytes */
+        BEQ, 10,0,0,0,         /* if equal → jump 6 bytes */
         CONST0, STOP,          /* not taken */
         CONST1, STOP           /* taken: acc=1 */
     };
@@ -38,7 +38,7 @@ void test_beq_true(void) {
 void test_bneq_true(void) {
     uint8_t bc[] = {
         CONSTINT, 5,0,0,0, PUSH, CONST3,
-        BNEQ, 6,0,0,0, CONST0, STOP, CONST1, STOP
+        BNEQ, 14,0,0,0, CONST0, STOP, CONST1, STOP
     };
     run(bc, sizeof(bc));
     ASSERT(Long_val(caml_get_acc()) == 1);

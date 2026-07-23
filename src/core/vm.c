@@ -47,7 +47,21 @@ static value p_dispatch(int idx, value* args, int nargs) {
 void caml_vm_init(void){caml_memory_init();accu=Val_unit;env_v=Val_unit;extra_args=0;trap=NULL;halted=0;yield_counter=YIELD_INTERVAL;instruction_count=0;}
 void caml_startup(const uint8_t* c,size_t s){caml_vm_init();caml_load_bytecode_buf(c,s,NULL,0);caml_init_globals();}
 void caml_init_globals(void){}
-void caml_load_bytecode_buf(const uint8_t* c,size_t cs,const uint8_t*d,size_t ds){(void)d;(void)ds;code_start=c;code_end=c+cs;pc=code_start;halted=0;}
+void caml_load_bytecode_buf(const uint8_t* c,size_t cs,const uint8_t*d,size_t ds){
+    code_start=c;code_end=c+cs;pc=code_start;halted=0;
+    if(d&&ds>0){
+        size_t nwords=ds/4;
+        if(nwords>MAX_GLOBALS)nwords=MAX_GLOBALS;
+        for(size_t i=0;i<nwords;i++){
+            value v=(value)CAML_READ_UINT32(d+i*4);
+            caml_global_set((mlsize_t)i,v);
+        }
+    }
+    /* push dummy return frame so module init can use PUSHACC1/APPLY etc */
+    caml_stack_push(Val_long(extra_args));
+    caml_stack_push(env_v);
+    caml_stack_push((value)(uintptr_t)code_end);
+}
 
 void caml_interpret(void){
     if(halted||!pc)return;
@@ -106,12 +120,12 @@ void caml_interpret(void){
         case GTINT:accu=Val_bool(Long_val(caml_stack_pop())>Long_val(accu));NEXT();break;
         case GEINT:accu=Val_bool(Long_val(caml_stack_pop())>=Long_val(accu));NEXT();break;
 
-        case BEQ:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())==Long_val(accu))pc+=o;else pc+=4;break;}
-        case BNEQ:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())!=Long_val(accu))pc+=o;else pc+=4;break;}
-        case BLTINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())<Long_val(accu))pc+=o;else pc+=4;break;}
-        case BLEINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())<=Long_val(accu))pc+=o;else pc+=4;break;}
-        case BGTINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())>Long_val(accu))pc+=o;else pc+=4;break;}
-        case BGEINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())>=Long_val(accu))pc+=o;else pc+=4;break;}
+        case BEQ:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())==Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BNEQ:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())!=Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BLTINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())<Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BLEINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())<=Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BGTINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())>Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BGEINT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(caml_stack_pop())>=Long_val(accu))pc=code_start+o;else pc+=4;break;}
         case ULTINT:accu=Val_bool((uintptr_t)Long_val(caml_stack_pop())<(uintptr_t)Long_val(accu));NEXT();break;
         case UGEINT:accu=Val_bool((uintptr_t)Long_val(caml_stack_pop())>=(uintptr_t)Long_val(accu));NEXT();break;
         case BOOLNOT:accu=Val_bool(Long_val(accu)==0);NEXT();break;
@@ -119,9 +133,9 @@ void caml_interpret(void){
         case OFFSETREF:{int8_t n=NEXT_S8();Field(accu,0)=Val_long(Long_val(Field(accu,0))+n);NEXT();break;}
         case ISINT:accu=Val_bool(Is_long(accu));NEXT();break;
 
-        case BRANCH:{int32_t o=CAML_READ_INT32(pc);pc+=o;break;}
-        case BRANCHIF:{int32_t o=CAML_READ_INT32(pc);if(Long_val(accu)!=0)pc+=o;else pc+=4;break;}
-        case BRANCHIFNOT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(accu)==0)pc+=o;else pc+=4;break;}
+        case BRANCH:{int32_t o=CAML_READ_INT32(pc);const uint8_t* target=code_start+o;if(target<code_start||target>=code_end){halted=1;return;}pc=target;break;}
+        case BRANCHIF:{int32_t o=CAML_READ_INT32(pc);if(Long_val(accu)!=0)pc=code_start+o;else pc+=4;break;}
+        case BRANCHIFNOT:{int32_t o=CAML_READ_INT32(pc);if(Long_val(accu)==0)pc=code_start+o;else pc+=4;break;}
 
         case PUSHTRAP:{int32_t o=CAML_READ_INT32(pc);pc+=4;caml_stack_push(accu);caml_stack_push(Val_long(extra_args));caml_stack_push(env_v);caml_stack_push((value)(uintptr_t)(pc+o));trap=caml_stack_pointer();NEXT();break;}
         case POPTRAP:{value*sp=caml_stack_pointer();accu=sp[3];extra_args=(int)Long_val(sp[2]);env_v=sp[1];caml_stack_pop();caml_stack_pop();caml_stack_pop();caml_stack_pop();trap=NULL;NEXT();break;}
@@ -133,13 +147,66 @@ void caml_interpret(void){
         case APPLY1:{value cl=accu,se=env_v;env_v=cl;extra_args=0;caml_stack_push(Val_long(0));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
         case APPLY2:{value cl=accu,se=env_v;env_v=cl;extra_args=1;caml_stack_push(Val_long(1));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
         case APPLY3:{value cl=accu,se=env_v;env_v=cl;extra_args=2;caml_stack_push(Val_long(2));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
-        case GRAB:{uint8_t r=NEXT_U8();if(extra_args<r){halted=1;return;}NEXT();break;}
-        case RETURN:{uint8_t n=NEXT_U8();value sp=caml_stack_pop(),se=caml_stack_pop(),sx=caml_stack_pop();extra_args=(int)Long_val(sx);env_v=se;pc=(const uint8_t*)(uintptr_t)sp;while(n--)caml_stack_pop();NEXT();break;}
+        case GRAB:{
+            uint8_t r=NEXT_U8();
+            if(extra_args>=r){extra_args-=r;NEXT();}
+            else if(extra_args+1>=r){extra_args=0;NEXT();}
+            else{halted=1;return;}
+            break;
+        }
+        case RETURN:{
+            uint8_t n=NEXT_U8();
+            value sp_ret=caml_stack_pop(),se=caml_stack_pop(),sx=caml_stack_pop();
+            extra_args=(int)Long_val(sx);env_v=se;pc=(const uint8_t*)(uintptr_t)sp_ret;
+            while(n--)caml_stack_pop();
+            NEXT();break;
+        }
         case RESTART:NEXT();break;
-        case APPTERM:case APPTERM1:case APPTERM2:case APPTERM3:{halted=1;return;}
+        case APPTERM:case APPTERM1:case APPTERM2:case APPTERM3:{
+            uint8_t nargs=(op==APPTERM)?NEXT_U8():(uint8_t)(op-APPTERM1+1);
+            uint8_t slotsize=NEXT_U8();
+            value cl=accu;
+            mlsize_t n=(mlsize_t)nargs+3+(mlsize_t)slotsize;
+            while(n--)caml_stack_pop();
+            env_v=cl;
+            size_t off=(size_t)Long_val(Field(cl,0));
+            if(off<(size_t)(code_end-code_start))pc=code_start+off;
+            else{halted=1;return;}
+            break;
+        }
 
-        case CLOSURE:{int32_t co=CAML_READ_INT32(pc);pc+=4;mlsize_t nv=NEXT_U8();uint8_t ar=NEXT_U8();value cl=caml_alloc(2+nv,Closure_tag);Field(cl,0)=Val_long(co);Field(cl,1)=Val_long((intptr_t)ar);for(mlsize_t i=0;i<nv;i++)Field(cl,2+i)=caml_stack_pop();accu=cl;NEXT();break;}
-        case CLOSUREREC:{halted=1;return;}
+        case CLOSURE:{
+            int32_t co=CAML_READ_INT32(pc);pc+=4;
+            mlsize_t nv=NEXT_U8();
+            value cl=caml_alloc(2+nv,Closure_tag);
+            Field(cl,0)=Val_long(co);
+            Field(cl,1)=Val_long((intptr_t)(nv<<1));
+            for(mlsize_t i=nv;i>0;i--)Field(cl,1+i)=caml_stack_pop();
+            accu=cl;NEXT();break;
+        }
+        case CLOSUREREC:{
+            mlsize_t nfuncs=NEXT_U8(),nvars=NEXT_U8();
+            /* envofs = nfuncs*3 - 1: each function uses 3 words (code_ptr, closinfo, infix_header) minus 1 overlap */
+            mlsize_t envofs=nfuncs*3-1;
+            mlsize_t wsz=envofs+nvars;
+            value cl=caml_alloc(wsz,Closure_tag);
+            value* p=&Field(cl,0);
+            /* build infix table: first function code pointer + closinfo, rest infix headers */
+            for(mlsize_t i=0;i<nfuncs;i++){
+                if(i==0){
+                    *p++ = (value)(pc + (int8_t)NEXT_U8());  /* code pointer = pc + relative offset */
+                    *p++ = Val_long((intptr_t)((nvars<<8)|nfuncs)); /* closinfo */
+                } else {
+                    *p++ = Make_header((header_t)(i*3),Infix_tag,0 /* Caml_white */);
+                }
+            }
+            /* copy free variables from stack */
+            for(mlsize_t i=nvars;i>0;i--)Field(cl,envofs+i-1)=caml_stack_pop();
+            /* skip remaining relative offsets */
+            pc+=nfuncs-1;  /* first offset already consumed by NEXT_U8 */
+            caml_stack_push(cl); /* push closure to stack (OCaml: *--sp = accu) */
+            accu=cl;NEXT();break;
+        }
 
         case GETGLOBAL:{uint32_t s=NEXT_U32();accu=caml_global_get((mlsize_t)s);break;}
         case SETGLOBAL:{uint32_t s=NEXT_U32();caml_global_set((mlsize_t)s,accu);NEXT();break;}
@@ -164,8 +231,14 @@ void caml_interpret(void){
         case PUSHENVACC3:caml_stack_push(accu);accu=Field(env_v,4);NEXT();break;
         case PUSHENVACC4:caml_stack_push(accu);accu=Field(env_v,5);NEXT();break;
         case PUSHENVACC:{uint8_t n=NEXT_U8();caml_stack_push(accu);accu=Field(env_v,(mlsize_t)n+2);break;}
-        case OFFSETCLOSUREM3:case OFFSETCLOSURE0:case OFFSETCLOSURE3:case OFFSETCLOSURE:
-        case PUSHOFFSETCLOSUREM3:case PUSHOFFSETCLOSURE0:case PUSHOFFSETCLOSURE3:case PUSHOFFSETCLOSURE:{halted=1;return;}
+        case OFFSETCLOSUREM3:accu=Field(env_v,2-3);NEXT();break;
+        case OFFSETCLOSURE0:accu=Field(env_v,2);NEXT();break;
+        case OFFSETCLOSURE3:accu=Field(env_v,2+3);NEXT();break;
+        case OFFSETCLOSURE:{uint8_t n=NEXT_U8();accu=Field(env_v,(mlsize_t)n+2);break;}
+        case PUSHOFFSETCLOSUREM3:caml_stack_push(accu);accu=Field(env_v,2-3);NEXT();break;
+        case PUSHOFFSETCLOSURE0:caml_stack_push(accu);accu=Field(env_v,2);NEXT();break;
+        case PUSHOFFSETCLOSURE3:caml_stack_push(accu);accu=Field(env_v,2+3);NEXT();break;
+        case PUSHOFFSETCLOSURE:{uint8_t n=NEXT_U8();caml_stack_push(accu);accu=Field(env_v,2+(mlsize_t)n);break;}
         case MAKEFLOATBLOCK:{uint8_t t=NEXT_U8();uint16_t s=CAML_READ_UINT16(pc);pc+=2;(void)t;(void)s;NEXT();break;}
         case GETFLOATFIELD:case SETFLOATFIELD:{uint8_t f=NEXT_U8();(void)f;NEXT();break;}
         case PUSHCONST0:caml_stack_push(accu);accu=Val_long(0);NEXT();break;
@@ -175,10 +248,27 @@ void caml_interpret(void){
         case ATOM:{uint32_t tag=NEXT_U32();value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
         case PUSHATOM0:caml_stack_push(accu);accu=Val_long(0);NEXT();break;
         case PUSHATOM:{uint32_t tag=NEXT_U32();caml_stack_push(accu);value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
+        case MAKEBLOCK:case MAKEBLOCK1:case MAKEBLOCK2:case MAKEBLOCK3:{
+            uint8_t tag=NEXT_U8();
+            uint16_t sz=CAML_READ_UINT16(pc);pc+=2;
+            int pre=(op==MAKEBLOCK)?0:(op==MAKEBLOCK1)?1:(op==MAKEBLOCK2)?2:3;
+            value b=caml_alloc((mlsize_t)(pre+sz),(tag_t)tag);
+            value* sp=caml_stack_pointer(); /* use OCaml convention: read from stack without popping */
+            for(mlsize_t i=0;i<(mlsize_t)sz;i++)
+                Field(b,(mlsize_t)(pre+sz-1-i))=sp[i];
+            if(pre)Field(b,0)=accu;
+            /* pop sz items from stack */
+            for(mlsize_t i=0;i<(mlsize_t)sz;i++)caml_stack_pop();
+            accu=b;NEXT();break;
+        }
         case VECTLENGTH:accu=Val_long(Wosize_hd(Hd_val(accu)));NEXT();break;
-        case SWITCH:{uint32_t sz=NEXT_U32();uint32_t def=NEXT_U32();uint32_t idx=(uint32_t)Long_val(accu);if(idx<sz){int32_t o=CAML_READ_INT32(pc+idx*4);pc+=o;}else{pc=code_start+def;};break;}
-        case BULTINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())<(uintptr_t)Long_val(accu))pc+=o;else pc+=4;break;}
-        case BUGEINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())>=(uintptr_t)Long_val(accu))pc+=o;else pc+=4;break;}
+        case GETVECTITEM:{value idx=caml_stack_pop();accu=Field(accu,(mlsize_t)Long_val(idx));NEXT();break;}
+        case SETVECTITEM:{value v=caml_stack_pop(),idx=caml_stack_pop();Field(v,(mlsize_t)Long_val(idx))=accu;accu=Val_unit;NEXT();break;}
+        case GETFIELD:{uint8_t n=NEXT_U8();accu=Field(accu,(mlsize_t)n);NEXT();break;}
+        case SETFIELD:{uint8_t n=NEXT_U8();Field(accu,(mlsize_t)n)=caml_stack_pop();NEXT();break;}
+        case SWITCH:{uint32_t sz=NEXT_U32();uint32_t def=NEXT_U32();uint32_t idx=(uint32_t)Long_val(accu);if(idx<sz){int32_t o=CAML_READ_INT32(pc+idx*4);/*FIXED*/ pc=code_start+o;}else{pc=code_start+def;};break;}
+        case BULTINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())<(uintptr_t)Long_val(accu))pc=code_start+o;else pc+=4;break;}
+        case BUGEINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())>=(uintptr_t)Long_val(accu))pc=code_start+o;else pc+=4;break;}
         case GETBYTESCHAR:case SETBYTESCHAR:case GETSTRINGCHAR:NEXT();break;
         case GETFIELD0:accu=Field(accu,0);NEXT();break;
         case GETFIELD1:accu=Field(accu,1);NEXT();break;

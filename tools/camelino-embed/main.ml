@@ -114,36 +114,98 @@ let () =
 
   while !i < Array.length words do
     let op = next_op () in
-    (* 0-operand: ACC0-7, PUSHACC0-7, PUSH_RETADDR, APPLY1-3, APPTERM, RETURN,
-       RESTART, GRAB, CONST0-3, NEGINT..GEINT, STOP, PUSH, POP (handled as 1-op below) *)
-    if op = 9 || op = 19 || op = 31 || op = 84 || op = 88 || op = 143
-       || (op >= 0 && op <= 7) || (op >= 10 && op <= 17)
-       || (op >= 33 && op <= 42) || (op >= 99 && op <= 102)
-       || (op >= 109 && op <= 126) then
-      emit_byte op
-    (* 1-byte operand from next word: OFFSETINT, ACC, PUSHACC, ASSIGN, APPLY, etc *)
-    else if op = 127 || op = 8 || op = 18 || op = 20 || op = 25 || op = 30 || op = 32
-            || op = 43 || op = 44 || op = 48 || op = 52
-            || (op >= 67 && op <= 78) then begin
-      emit_byte op; emit_byte (next_op ())
-    end
-    (* ATOM0 / PUSHATOM0: 0 operand *)
-    else if op = 58 || op = 60 then
-      emit_byte op
-    (* ATOM / PUSHATOM / GETGLOBAL / SETGLOBAL / CONSTINT / BRANCH family / C_CALL: 4-byte operand *)
-    else if op = 59 || op = 61 || (op >= 53 && op <= 57) || op = 103 || op = 108
-            || (op >= 84 && op <= 86) || (op >= 89 && op <= 91) || (op >= 93 && op <= 98)
-            || (op >= 146 && op <= 147) then begin
-      emit_byte op; emit_int32_le (next_op ())
-    end
-    (* MAKEBLOCK: 1-byte tag + 2-byte size *)
-    else if op >= 62 && op <= 66 then begin
-      emit_byte op; emit_byte (next_op ());  (* tag *)
-      let sz = next_op () in
-      emit_byte (sz land 0xFF); emit_byte ((sz lsr 8) land 0xFF)  (* size LE *)
-    end
-    else
-      emit_byte op  (* unknown: emit opcode only *)
+    let nxt8 () = emit_byte (next_op ()) in
+    let nxt16 () = let v = next_op () in emit_byte (v land 0xFF); emit_byte ((v lsr 8) land 0xFF) in
+    let nxt32 () = emit_int32_le (next_op ()) in
+
+    (* Dispatch table: operand format for each opcode.
+       OCaml 4.14 ZAM instructions have at most one operand size category,
+       except CLOSURE/CLOSUREREC/BEQ-family which have compound operands. *)
+    let fmt = match op with
+      (* ---- 0-operand ---- *)
+      | 0|1|2|3|4|5|6|7              (* ACC0-7 *)
+      | 9                             (* PUSH *)
+      | 10|11|12|13|14|15|16|17      (* PUSHACC0-7 *)
+      | 19                            (* POP *)
+      | 21|22|23|24                   (* ENVACC1-4 *)
+      | 25|26|27|28                   (* PUSHENVACC1-4 *)
+      | 29                            (* PUSH_RETADDR *)
+      | 31                            (* APPLY1 *)
+      | 33                            (* APPLY3 *)
+      | 36                            (* RESTART *)
+      | 58                            (* ATOM0 *)
+      | 60                            (* PUSHATOM0 *)
+      | 83|84|85                      (* BOOLNOT BOOLAND BOOLOR *)
+      | 86                            (* PUSHTRAP *)
+      | 87                            (* POPTRAP *)
+      | 88                            (* RAISE *)
+      | 89                            (* CHECK_SIGNALS *)
+      | 99|100|101|102                (* CONST0-3 *)
+      | 104|105|106|107               (* PUSHCONST0-3 *)
+      | 109|110|111|112|113|114       (* NEGINT ADDINT SUBINT MULINT DIVINT MODINT *)
+      | 115|116|117|118|119|120       (* ANDINT ORINT XORINT LSLINT LSRINT ASRINT *)
+      | 121|122|123|124|125|126       (* EQ NEQ LTINT LEINT GTINT GEINT *)
+      | 128                           (* OFFSETREF *)
+      | 129                           (* ISINT *)
+      | 143                           (* STOP *)
+      | 144|145 ->                    (* EVENT BREAK *)
+        `ZERO
+      (* ---- 1-byte operand ---- *)
+      | 8                             (* ACC n *)
+      | 18                            (* PUSHACC n *)
+      | 20                            (* ASSIGN n *)
+      | 30                            (* APPLY nargs *)
+      | 32                            (* APPLY2 *)
+      | 34                            (* APPTERM nargs, slotsize *)
+      | 35                            (* RETURN n *)
+      | 37                            (* GRAB n *)
+      | 48                            (* PUSHATOM — wait, PUSHATOM is 59/61 *)
+      | 127 ->                        (* OFFSETINT *)
+        `BYTE1
+      (* ---- 2-byte operand (little-endian) ---- *)
+      | 52|67|68|69|70|71|72|73|74|75|76|77|78|79 ->
+        `SHORT2
+      (* ---- 4-byte operand ---- *)
+      | 53                            (* PUSHGETGLOBAL slot *)
+      | 54                            (* GETGLOBAL slot *)
+      | 57                            (* SETGLOBAL slot *)
+      | 59                            (* ATOM tag *)
+      | 61                            (* PUSHATOM tag *)
+      | 80|81|82                      (* BRANCH BRANCHIF BRANCHIFNOT *)
+      | 90|91|92|93|94|95             (* C_CALL1-5,N *)
+      | 103                           (* CONSTINT *)
+      | 108                           (* PUSHCONSTINT *)
+      | 146|147 ->                    (* GETPUBMET GETDYNMET *)
+        `INT32
+      (* ---- CLOSURE/CLOSUREREC: 1-byte + 4-byte ---- *)
+      | 38|39 ->                      (* CLOSURE CLOSUREREC *)
+        `CLOSURE
+      (* ---- GETGLOBALFIELD/PUSHGETGLOBALFIELD: 4-byte + 1-byte ---- *)
+      | 55|56 ->                      (* PUSHGETGLOBALFIELD GETGLOBALFIELD *)
+        `GLOBALFIELD
+      (* ---- BEQ-family branch-compare: branch offset only (opcode encodes comparison kind and size) ---- *)
+      | 40|41|42|43|44|45|46|47 ->
+        `BRANCHCOMP
+      (* ---- MAKEBLOCK/MAKEBLOCK1-3: 1-byte tag + 2-byte size ---- *)
+      | 62|63|64|65|66 ->             (* MAKEBLOCK MAKEBLOCK1-3 MAKEFLOATBLOCK *)
+        `MAKEBLOCK
+      (* ---- APPTERM: 1-byte nargs + 1-byte slotsize ---- *)
+      (* already handled as BYTE1 above *)
+      (* ---- default: emit opcode only, skip ---- *)
+      | _ ->
+        `UNKNOWN
+    in
+    (match fmt with
+     | `ZERO -> emit_byte op
+     | `BYTE1 -> emit_byte op; nxt8 ()
+     | `SHORT2 -> emit_byte op; nxt16 ()
+     | `INT32 -> emit_byte op; nxt32 ()
+     | `CLOSURE -> emit_byte op; nxt8 (); nxt32 ()
+     | `GLOBALFIELD -> emit_byte op; nxt32 (); nxt8 ()
+     | `BRANCHCOMP -> emit_byte op; nxt32 ()
+     | `MAKEBLOCK -> emit_byte op; nxt8 (); nxt16 ()
+     | `UNKNOWN -> emit_byte op
+    );
   done;
   (* OCaml bytecode may not end with STOP — append one *)
   emit_byte 143;  (* STOP *)

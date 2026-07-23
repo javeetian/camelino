@@ -146,7 +146,7 @@ void caml_interpret(void){
         case GETGLOBALFIELD:{uint32_t s=NEXT_U32();uint8_t i=NEXT_U8();accu=Field(caml_global_get((mlsize_t)s),(mlsize_t)i);NEXT();break;}
         case PUSHGETGLOBAL:{uint32_t s=NEXT_U32();caml_stack_push(accu);accu=caml_global_get((mlsize_t)s);break;}
         case PUSHGETGLOBALFIELD:{uint32_t s=NEXT_U32();uint8_t i=NEXT_U8();value g=caml_global_get((mlsize_t)s);caml_stack_push(accu);accu=Field(g,(mlsize_t)i);NEXT();break;}
-        case ATOM0:{uint32_t i=NEXT_U32();(void)i;NEXT();break;}
+        case ATOM0:NEXT();break;
 
         case C_CALL1:{int i=(int)NEXT_U32();value a=caml_stack_pop();accu=p_dispatch(i,&a,1);NEXT();break;}
         case C_CALL2:{int i=(int)NEXT_U32();value a2=caml_stack_pop(),a1=caml_stack_pop();value args[2]={a1,a2};accu=p_dispatch(i,args,2);NEXT();break;}
@@ -172,9 +172,9 @@ void caml_interpret(void){
         case PUSHCONST1:caml_stack_push(accu);accu=Val_long(1);NEXT();break;
         case PUSHCONST2:caml_stack_push(accu);accu=Val_long(2);NEXT();break;
         case PUSHCONST3:caml_stack_push(accu);accu=Val_long(3);NEXT();break;
-        case ATOM:{uint8_t n=NEXT_U8();(void)n;NEXT();break;}
+        case ATOM:{uint32_t tag=NEXT_U32();value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
         case PUSHATOM0:caml_stack_push(accu);accu=Val_long(0);NEXT();break;
-        case PUSHATOM:{uint8_t n=NEXT_U8();caml_stack_push(accu);(void)n;NEXT();break;}
+        case PUSHATOM:{uint32_t tag=NEXT_U32();caml_stack_push(accu);value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
         case VECTLENGTH:accu=Val_long(Wosize_hd(Hd_val(accu)));NEXT();break;
         case SWITCH:{uint32_t sz=NEXT_U32();uint32_t def=NEXT_U32();uint32_t idx=(uint32_t)Long_val(accu);if(idx<sz){int32_t o=CAML_READ_INT32(pc+idx*4);pc+=o;}else{pc=code_start+def;};break;}
         case BULTINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())<(uintptr_t)Long_val(accu))pc+=o;else pc+=4;break;}

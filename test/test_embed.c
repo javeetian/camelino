@@ -57,8 +57,8 @@ static uint8_t* mk(const uint8_t*code,size_t cs,size_t*out){
  *out=t;return b;}
 
 void test_embed_2_plus_3(void){
- /* Compact bytecode: CONST2, OFFSETINT 3, ATOM0(0), SETGLOBAL(0), STOP */
- uint8_t code[]={CONST2, OFFSETINT,3, ATOM0,0,0,0,0, SETGLOBAL,0,0,0,0, STOP};
+ /* Compact bytecode: CONST2, OFFSETINT 3, ATOM0, SETGLOBAL(0), STOP */
+ uint8_t code[]={CONST2, OFFSETINT,3, ATOM0, SETGLOBAL,0,0,0,0, STOP};
  size_t len;uint8_t*buf=mk(code,sizeof(code),&len);
  ASSERT(caml_bytecode_load(buf,len)==CAML_BC_OK);
  caml_vm_init();caml_load_bytecode_buf(caml_bytecode_code(),caml_bytecode_code_size(),NULL,0);

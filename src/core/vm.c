@@ -33,6 +33,15 @@ static size_t instruction_count = 0;
 static caml_trace_fn trace_hook = NULL;
 #define YIELD_INTERVAL 1000
 
+/* Get code offset from closure (handles infix closures from CLOSUREREC).
+   Normal closure: Field 0 = Val_long(offset).
+   Infix closure: Field 0 = Make_header(Infix_tag), Field 1 = Val_long(offset). */
+static size_t closure_code_offset(value cl) {
+    if ((Field(cl, 0) & 0xFF) == Infix_tag)
+        return (size_t)Long_val(Field(cl, 2));
+    return (size_t)Long_val(Field(cl, 0));
+}
+
 #define NEXT() (void)0
 #define NEXT_U32() ({uint32_t v_=CAML_READ_UINT32(pc);pc+=4;v_;})
 
@@ -57,10 +66,28 @@ void caml_load_bytecode_buf(const uint8_t* c,size_t cs,const uint8_t*d,size_t ds
             caml_global_set((mlsize_t)i,v);
         }
     }
-    /* push dummy return frame so module init can use PUSHACC1/APPLY etc */
+    /* Build OCaml-style callback frame (matching runtime/callback.c caml_callbackN_exn).
+       For narg=0 (module init): sp[0]=return_pc, sp[1]=Val_unit, sp[2]=Val_long(0), sp[3]=closure.
+       The closure is a minimal 2-field block pointing to bytecode entry at offset 0.
+       APPLY (simulated inline) pushes return frame [extra_args, saved_env, return_pc]
+       and jumps to the closure code. */
+    value cl = caml_alloc(2, Closure_tag);
+    Field(cl, 0) = Val_long(0);     /* code offset: entry point */
+    Field(cl, 1) = Val_long(0);     /* closinfo: arity=0 */
+    caml_stack_push(cl);                 /* sp[3] after all pushes */
+    caml_stack_push(Val_long(0));        /* sp[2] = extra_args = 0 */
+    caml_stack_push(Val_unit);           /* sp[1] = env */
+    caml_stack_push((value)(uintptr_t)code_end); /* sp[0] = return_addr */
+
+    /* Simulate ACC(narg+3) → read closure from sp[3]; APPLY(narg=0) → push frame + jump */
+    accu = cl;
+    env_v = cl;
+    extra_args = -1; /* narg-1 = -1 for 0-arg apply */
     caml_stack_push(Val_long(extra_args));
-    caml_stack_push(env_v);
+    caml_stack_push(Val_unit);
     caml_stack_push((value)(uintptr_t)code_end);
+    pc = code_start; /* entry offset 0 */
+    halted = 0;
 }
 
 void caml_interpret(void){
@@ -143,10 +170,10 @@ void caml_interpret(void){
         case RERAISE:{if(!trap){halted=1;return;}value*tr=trap;pc=(const uint8_t*)(uintptr_t)tr[0];env_v=tr[1];extra_args=(int)Long_val(tr[2]);while(caml_stack_pointer()>tr)caml_stack_pop();caml_stack_pop();caml_stack_pop();caml_stack_pop();caml_stack_pop();trap=NULL;NEXT();break;}
 
         case PUSH_RETADDR:{int32_t o=CAML_READ_INT32(pc);pc+=4;caml_stack_push(Val_long(extra_args));caml_stack_push(env_v);caml_stack_push((value)(uintptr_t)(pc+o));NEXT();break;}
-        case APPLY:{uint8_t n=NEXT_U8();value cl=accu;value se=env_v;env_v=cl;extra_args=(int)n-1;caml_stack_push(Val_long(extra_args));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t off=(size_t)Long_val(Field(cl,0));if(off<(size_t)(code_end-code_start))pc=code_start+off;NEXT();break;}
-        case APPLY1:{value cl=accu,se=env_v;env_v=cl;extra_args=0;caml_stack_push(Val_long(0));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
-        case APPLY2:{value cl=accu,se=env_v;env_v=cl;extra_args=1;caml_stack_push(Val_long(1));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
-        case APPLY3:{value cl=accu,se=env_v;env_v=cl;extra_args=2;caml_stack_push(Val_long(2));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=(size_t)Long_val(Field(cl,0));if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
+        case APPLY:{uint8_t n=NEXT_U8();value cl=accu;value se=env_v;env_v=cl;extra_args=(int)n-1;caml_stack_push(Val_long(extra_args));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t off=closure_code_offset(cl);if(off<(size_t)(code_end-code_start))pc=code_start+off;NEXT();break;}
+        case APPLY1:{value cl=accu,se=env_v;env_v=cl;extra_args=0;caml_stack_push(Val_long(0));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=closure_code_offset(cl);if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
+        case APPLY2:{value cl=accu,se=env_v;env_v=cl;extra_args=1;caml_stack_push(Val_long(1));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=closure_code_offset(cl);if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
+        case APPLY3:{value cl=accu,se=env_v;env_v=cl;extra_args=2;caml_stack_push(Val_long(2));caml_stack_push(se);caml_stack_push((value)(uintptr_t)pc);size_t o=closure_code_offset(cl);if(o<(size_t)(code_end-code_start))pc=code_start+o;NEXT();break;}
         case GRAB:{
             uint8_t r=NEXT_U8();
             if(extra_args>=r){extra_args-=r;NEXT();}
@@ -161,7 +188,15 @@ void caml_interpret(void){
             while(n--)caml_stack_pop();
             NEXT();break;
         }
-        case RESTART:NEXT();break;
+        case RESTART:{
+            /* Reference: OCaml 4.14 interp.c Instruct(RESTART)
+               Reorganize stack from partial application: env holds saved args */
+            mlsize_t num_args = Wosize_hd(Hd_val(env_v)) - 3;
+            for(mlsize_t i=0;i<num_args;i++) caml_stack_push(Field(env_v,3+i));
+            env_v=Field(env_v,2);
+            extra_args+=(int)num_args;
+            NEXT();break;
+        }
         case APPTERM:case APPTERM1:case APPTERM2:case APPTERM3:{
             uint8_t nargs=(op==APPTERM)?NEXT_U8():(uint8_t)(op-APPTERM1+1);
             uint8_t slotsize=NEXT_U8();
@@ -169,15 +204,15 @@ void caml_interpret(void){
             mlsize_t n=(mlsize_t)nargs+3+(mlsize_t)slotsize;
             while(n--)caml_stack_pop();
             env_v=cl;
-            size_t off=(size_t)Long_val(Field(cl,0));
+            size_t off=closure_code_offset(cl);
             if(off<(size_t)(code_end-code_start))pc=code_start+off;
             else{halted=1;return;}
             break;
         }
 
         case CLOSURE:{
-            int32_t co=CAML_READ_INT32(pc);pc+=4;
             mlsize_t nv=NEXT_U8();
+            int32_t co=CAML_READ_INT32(pc);pc+=4;
             value cl=caml_alloc(2+nv,Closure_tag);
             Field(cl,0)=Val_long(co);
             Field(cl,1)=Val_long((intptr_t)(nv<<1));
@@ -186,24 +221,32 @@ void caml_interpret(void){
         }
         case CLOSUREREC:{
             mlsize_t nfuncs=NEXT_U8(),nvars=NEXT_U8();
-            /* envofs = nfuncs*3 - 1: each function uses 3 words (code_ptr, closinfo, infix_header) minus 1 overlap */
+            /* envofs = nfuncs*3 - 1: each function uses 3 words minus 1 overlap.
+               +1 extra field for OFFSETCLOSURE access (e.g. f0 accesses f1 at envofs=5) */
             mlsize_t envofs=nfuncs*3-1;
-            mlsize_t wsz=envofs+nvars;
+            mlsize_t wsz=envofs+nvars+1;  /* +1: OFFSETCLOSURE reads Field(env, 2+n) up to envofs */
             value cl=caml_alloc(wsz,Closure_tag);
             value* p=&Field(cl,0);
             /* build infix table: first function code pointer + closinfo, rest infix headers */
             for(mlsize_t i=0;i<nfuncs;i++){
+                int8_t off = (int8_t)NEXT_U8();
+                intptr_t rel = (intptr_t)((pc - 1 - code_start) + off);
                 if(i==0){
-                    *p++ = (value)(pc + (int8_t)NEXT_U8());  /* code pointer = pc + relative offset */
-                    *p++ = Val_long((intptr_t)((nvars<<8)|nfuncs)); /* closinfo */
+                    *p++ = Val_long(rel);
+                    *p++ = /* self-pointer for OFFSETCLOSURE access */ (value)(void*)p;
                 } else {
-                    *p++ = Make_header((header_t)(i*3),Infix_tag,0 /* Caml_white */);
+                    envofs -= 3;
+                    *p++ = Make_header((header_t)(i*3),Infix_tag,0);
+                    caml_stack_push((value)(void*)p);  /* push infix pointer (OCaml: *--sp = p) */
+                    *p++ = Val_long(rel);
+                    *p++ = /* self-pointer for OFFSETCLOSURE access */ (value)(void*)p;
                 }
             }
             /* copy free variables from stack */
             for(mlsize_t i=nvars;i>0;i--)Field(cl,envofs+i-1)=caml_stack_pop();
-            /* skip remaining relative offsets */
-            pc+=nfuncs-1;  /* first offset already consumed by NEXT_U8 */
+            /* store f1's infix pointer at envofs for f0's OFFSETCLOSURE access */
+            if(nfuncs>=2) Field(cl, envofs) = Field(cl, 2);
+            /* all nfuncs offsets consumed by the loop above */
             caml_stack_push(cl); /* push closure to stack (OCaml: *--sp = accu) */
             accu=cl;NEXT();break;
         }
@@ -213,7 +256,7 @@ void caml_interpret(void){
         case GETGLOBALFIELD:{uint32_t s=NEXT_U32();uint8_t i=NEXT_U8();accu=Field(caml_global_get((mlsize_t)s),(mlsize_t)i);NEXT();break;}
         case PUSHGETGLOBAL:{uint32_t s=NEXT_U32();caml_stack_push(accu);accu=caml_global_get((mlsize_t)s);break;}
         case PUSHGETGLOBALFIELD:{uint32_t s=NEXT_U32();uint8_t i=NEXT_U8();value g=caml_global_get((mlsize_t)s);caml_stack_push(accu);accu=Field(g,(mlsize_t)i);NEXT();break;}
-        case ATOM0:NEXT();break;
+        case ATOM0:NEXT();break; /* NOP: reads globals[0] when atom table loaded */
 
         case C_CALL1:{int i=(int)NEXT_U32();value a=caml_stack_pop();accu=p_dispatch(i,&a,1);NEXT();break;}
         case C_CALL2:{int i=(int)NEXT_U32();value a2=caml_stack_pop(),a1=caml_stack_pop();value args[2]={a1,a2};accu=p_dispatch(i,args,2);NEXT();break;}
@@ -239,15 +282,42 @@ void caml_interpret(void){
         case PUSHOFFSETCLOSURE0:caml_stack_push(accu);accu=Field(env_v,2);NEXT();break;
         case PUSHOFFSETCLOSURE3:caml_stack_push(accu);accu=Field(env_v,2+3);NEXT();break;
         case PUSHOFFSETCLOSURE:{uint8_t n=NEXT_U8();caml_stack_push(accu);accu=Field(env_v,2+(mlsize_t)n);break;}
-        case MAKEFLOATBLOCK:{uint8_t t=NEXT_U8();uint16_t s=CAML_READ_UINT16(pc);pc+=2;(void)t;(void)s;NEXT();break;}
-        case GETFLOATFIELD:case SETFLOATFIELD:{uint8_t f=NEXT_U8();(void)f;NEXT();break;}
+        case MAKEFLOATBLOCK:{
+            mlsize_t sz = NEXT_U8();  /* number of doubles */
+            mlsize_t wosize = sz * (sizeof(double) / sizeof(value));
+            value b = caml_alloc(wosize, Double_array_tag);
+            double* dp = (double*)(void*)&Field(b, 0);
+            dp[sz-1] = *(double*)(void*)&accu;
+            for(mlsize_t i=1;i<sz;i++){
+                value v = caml_stack_pop();
+                double d; memcpy(&d, &Field(v,0), sizeof(double));
+                dp[sz-1-i] = d;
+            }
+            accu = b; NEXT();break;
+        }
+        case GETFLOATFIELD:{
+            uint8_t idx=NEXT_U8();
+            mlsize_t off=(mlsize_t)idx*(sizeof(double)/sizeof(value));
+            double d; memcpy(&d,(char*)accu+off*sizeof(value),sizeof(double));
+            value box=caml_alloc(sizeof(double)/sizeof(value),Double_tag);
+            memcpy(&Field(box,0),&d,sizeof(double));
+            accu=box;NEXT();break;
+        }
+        case SETFLOATFIELD:{
+            uint8_t idx=NEXT_U8();
+            value src=caml_stack_pop();
+            double d; memcpy(&d,&Field(src,0),sizeof(double));
+            mlsize_t off=(mlsize_t)idx*(sizeof(double)/sizeof(value));
+            memcpy((char*)accu+off*sizeof(value),&d,sizeof(double));
+            accu=Val_unit;NEXT();break;
+        }
         case PUSHCONST0:caml_stack_push(accu);accu=Val_long(0);NEXT();break;
         case PUSHCONST1:caml_stack_push(accu);accu=Val_long(1);NEXT();break;
         case PUSHCONST2:caml_stack_push(accu);accu=Val_long(2);NEXT();break;
         case PUSHCONST3:caml_stack_push(accu);accu=Val_long(3);NEXT();break;
-        case ATOM:{uint32_t tag=NEXT_U32();value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
-        case PUSHATOM0:caml_stack_push(accu);accu=Val_long(0);NEXT();break;
-        case PUSHATOM:{uint32_t tag=NEXT_U32();caml_stack_push(accu);value b=caml_alloc(0,(tag_t)tag);(void)b;NEXT();break;}
+        case ATOM:{uint32_t idx=NEXT_U32();accu=caml_global_get((mlsize_t)idx);NEXT();break;}
+        case PUSHATOM0:caml_stack_push(accu);NEXT();break; /* PUSH + ATOM0 */
+        case PUSHATOM:{uint32_t idx=NEXT_U32();caml_stack_push(accu);accu=caml_global_get((mlsize_t)idx);NEXT();break;}
         case MAKEBLOCK:case MAKEBLOCK1:case MAKEBLOCK2:case MAKEBLOCK3:{
             uint8_t tag=NEXT_U8();
             uint16_t sz=CAML_READ_UINT16(pc);pc+=2;
@@ -269,7 +339,16 @@ void caml_interpret(void){
         case SWITCH:{uint32_t sz=NEXT_U32();uint32_t def=NEXT_U32();uint32_t idx=(uint32_t)Long_val(accu);if(idx<sz){int32_t o=CAML_READ_INT32(pc+idx*4);/*FIXED*/ pc=code_start+o;}else{pc=code_start+def;};break;}
         case BULTINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())<(uintptr_t)Long_val(accu))pc=code_start+o;else pc+=4;break;}
         case BUGEINT:{int32_t o=CAML_READ_INT32(pc);if((uintptr_t)Long_val(caml_stack_pop())>=(uintptr_t)Long_val(accu))pc=code_start+o;else pc+=4;break;}
-        case GETBYTESCHAR:case SETBYTESCHAR:case GETSTRINGCHAR:NEXT();break;
+        case GETBYTESCHAR:case GETSTRINGCHAR:{
+            value idx=caml_stack_pop();
+            accu=Val_long((intptr_t)((unsigned char*)(void*)accu)[Long_val(idx)]);
+            NEXT();break;
+        }
+        case SETBYTESCHAR:{
+            value v=caml_stack_pop(),idx=caml_stack_pop();
+            ((unsigned char*)(void*)accu)[Long_val(idx)]=(unsigned char)(Long_val(v)&0xFF);
+            accu=Val_unit;NEXT();break;
+        }
         case GETFIELD0:accu=Field(accu,0);NEXT();break;
         case GETFIELD1:accu=Field(accu,1);NEXT();break;
         case GETFIELD2:accu=Field(accu,2);NEXT();break;
@@ -278,7 +357,34 @@ void caml_interpret(void){
         case SETFIELD1:Field(accu,1)=caml_stack_pop();NEXT();break;
         case SETFIELD2:Field(accu,2)=caml_stack_pop();NEXT();break;
         case SETFIELD3:Field(accu,3)=caml_stack_pop();NEXT();break;
-        case GETMETHOD:case GETPUBMET:case GETDYNMET:{halted=1;return;}
+        case GETMETHOD:{
+            /* OCaml ref: interp.c ln 1082-1086  Lookup(obj,lab) = Field(Field(obj,0), Int_val(lab)) */
+            accu = Field(Field(caml_stack_pointer()[0], 0), (mlsize_t)Long_val(accu));
+            NEXT();break;
+        }
+        case GETPUBMET:{
+            /* camelino-embed emits INT32 (4 bytes): tag_byte + cache_byte + 2 unused */
+            uint8_t tag = NEXT_U8(); uint8_t cache = NEXT_U8(); pc += 2; (void)tag; (void)cache;
+        }
+        /* FALLTHROUGH to GETDYNMET */
+        case GETDYNMET:{
+            /* OCaml ref: interp.c ln 1132-1143. Binary search method table for accu(tag).
+               Method table: Field(obj,0)=meths, Field(meths,0)=size(tagged), Field(meths,1)=cache
+               Fields 2.. = {closure, tag} pairs ordered by tag ascending. */
+            value obj = caml_stack_pointer()[0];
+            value meths = Field(obj, 0);
+            int li = 3, hi = (int)Field(meths, 0), mi;
+            /* If size is tagged (bit0=1), untag it */
+            if(hi & 1) hi = (int)Long_val((value)(intptr_t)hi);
+            while(li < hi){
+                mi = ((li + hi) >> 1) | 1;  /* ensure odd (tag position) */
+                if(accu < Field(meths, (mlsize_t)mi)) hi = mi - 2;
+                else li = mi;
+            }
+            accu = Field(meths, (mlsize_t)(li - 1));  /* closure at even position */
+            pc += 4;  /* camelino-embed emits INT32 (4 bytes) for GETDYNMET */
+            NEXT();break;
+        }
         case EVENT:case BREAK:NEXT();break;
 
         case STOP:halted=1;return;

@@ -77,9 +77,9 @@ static void p1_cmp(void) {
 /* ---- Phase 1: Branch (3 tests) ---- */
 static void p1_branch(void) {
     printf("\n── Phase 1: Branch (3 tests) ────────────────────\n");
-    {uint8_t c[]={CONST1,BRANCH,5,0,0,0,CONST3,STOP};T("branch_skip",c,8,1);}
-    {uint8_t c[]={CONST1,BRANCHIF,5,0,0,0,CONST3,STOP};T("branchif_true",c,8,1);}
-    {uint8_t c[]={CONST0,BRANCHIFNOT,5,0,0,0,CONST3,STOP};T("branchifnot_false",c,8,0);}
+    {uint8_t c[]={CONST1,BRANCH,7,0,0,0,CONST3,STOP};T("branch_skip",c,8,1);}
+    {uint8_t c[]={CONST1,BRANCHIF,7,0,0,0,CONST3,STOP};T("branchif_true",c,8,1);}
+    {uint8_t c[]={CONST0,BRANCHIFNOT,7,0,0,0,CONST3,STOP};T("branchifnot_false",c,8,0);}
 }
 
 /* ---- Phase 1: Stack (2 tests) ---- */
@@ -130,10 +130,8 @@ static void p5_p1(void) {
     {uint8_t c[]={CONST3,ISINT,STOP};T("isint_3",c,3,1);}
     {uint8_t c[]={CONSTINT,255,255,255,255,PUSH,CONST1,ULTINT,STOP};
      T("ultint_minus1_lt_1",c,9,0);}
-    {uint8_t c[]={CONST3,PUSH,CONST3,BEQ,5,0,0,0,CONST0,STOP,CONSTINT,99,0,0,0,STOP};
-     T("beq_equal_skip",c,10,3);}
-    {uint8_t c[]={CONSTINT,5,0,0,0,PUSH,CONST3,BNEQ,5,0,0,0,CONST0,STOP,CONSTINT,99,0,0,0,STOP};
-     T("bneq_3_5_skip",c,15,3);}
+    {uint8_t c[]={CONST3,PUSH,CONST3,BEQ,9,0,0,0,CONST0,STOP};T("beq_equal_skip",c,10,3);}
+    {uint8_t c[]={CONSTINT,5,0,0,0,PUSH,CONST3,BNEQ,13,0,0,0,CONST0,STOP};T("bneq_3_5_skip",c,14,3);}
 }
 
 /* ---- Phase 4: FFI (1 test) ---- */

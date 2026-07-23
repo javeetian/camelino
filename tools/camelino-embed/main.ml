@@ -84,7 +84,7 @@ let encode_compact code_str ~use_word_index =
       | 55|56 -> (6, 2)                                       (* GLOBALFIELD: 1 + 4 + 1; 3 words *)
       | 80|81|82 -> (3, 1)                                    (* GETVECTITEM/SETVECTITEM/GETBYTESCHAR *)
       | 83 -> (3, 1)                                          (* SETBYTESCHAR: 1 + 2 *)
-      | 84|85|86 -> (5, 1)                                    (* BRANCH/BRANCHIF/BRANCHIFNOT: 1 + 4 *)
+      | 84|85|86|89 -> (5, 1)                                    (* BRANCH family + PUSHTRAP: 1 + 4 *)
       | 87 -> (9, 2)                                          (* SWITCH: 1 + 4 + 4; 3 words *)
       | 93|94|95|96|97 -> (5, 1)                              (* C_CALL1-5: 1 + 4 *)
       | 98 -> (6, 2)                                          (* C_CALLN: 1 + 4 + 1; 3 words *)
@@ -93,7 +93,8 @@ let encode_compact code_str ~use_word_index =
       | 19 -> (3, 1)                                          (* POP: 1 + 2-byte count *)
 
       | 52|67|68|69|70|71|72|73|74|75|76|77|78|79 -> (3, 1)  (* field/vector/bytes ops: 1 + 2 *)
-      | 62|63|64|65|66 -> (2, 1)                              (* MAKEBLOCK: 1 opcode + 1 tag; size=0 optimized *)
+      | 62|63|64|65 -> (4, 1)  (* MAKEBLOCK: op + tag + sz16; skip 1 word *)
+      | 66 -> (2, 1)                              (* MAKEFLOATBLOCK: op + size_byte *)
       | 8|18|20|30|32|35|37|40|42|127 -> (2, 1)                  (* 1-byte operand: 2 words; RETURN=40, GRAB=42 *)
       | _ -> (1, 0)                                           (* 0-operand: 1 word *)
     in
@@ -128,15 +129,16 @@ let encode_compact code_str ~use_word_index =
   let nxt32 () = emit_int32_le (next_op ()) in
   let nxt32_branch () =
     let old_off = next_op () in
-    let target_widx = if use_word_index then old_off else old_off / 4 in
+            let target_widx = (!i - 1) + old_off in
     (* Find the first mapped compact offset at or after target_widx.
        Some branch targets land on operand words which have no map entry. *)
     let rec find_map idx =
-      if idx >= nwords then old_off
+              if idx < 0 then old_off
+              else if idx >= nwords then old_off
       else if word_map.(idx) <> 0 || idx = 0 then word_map.(idx)
       else find_map (idx + 1)
     in
-    let remapped = find_map target_widx in
+            let remapped = find_map target_widx in
     emit_int32_le remapped
   in
 
@@ -144,12 +146,13 @@ let encode_compact code_str ~use_word_index =
     let op = next_op () in
     let fmt = match op with
       | 0|1|2|3|4|5|6|7 -> `ZERO     (* ACC0-7 *)
-      | 9|29|31|33|36|58|60 -> `ZERO  (* PUSH, PUSH_RETADDR, APPLY1, APPLY3, RESTART, ATOM0, PUSHATOM0 *)
+      | 9|29|31|33|58|60 -> `ZERO  (* PUSH, PUSH_RETADDR, APPLY1, APPLY3, ATOM0, PUSHATOM0 *)
       | 19 -> `SHORT2  (* POP: 2-byte count *)
-      | 10|11|12|13|14|15|16|17 -> `ZERO (* PUSHACC0-7 *)
+      | 10 -> `ZERO      (* PUSHACC0 stays *)
+      | 11|12|13|14|15|16|17 -> `PUSHACC (* PUSHACC1-7: downgrade by 1 *)
       | 21|22|23|24|25|26|27|28 -> `ZERO (* ENVACC1-4, PUSHENVACC1-4 *)
       | 88 -> `ZERO    (* BOOLNOT: 0-operand *)
-      | 89 -> `INT32    (* PUSHTRAP: 4-byte handler offset *)
+      | 89 -> `BRANCH   (* PUSHTRAP: remapped 4-byte handler offset — same as BRANCH *)
       | 90|91|92 -> `ZERO   (* POPTRAP, RAISE, CHECK_SIGNALS *)
       | 99|100|101|102|104|105|106|107 -> `ZERO (* CONST0-3, PUSHCONST0-3 *)
       | 109|110|111|112|113|114|115|116|117|118|119|120 -> `ZERO
@@ -168,11 +171,13 @@ let encode_compact code_str ~use_word_index =
       | 44 -> `CLOSUREREC  (* 4-byte remapped + 1-byte nfuncs + 1-byte nvars *)
       | 55|56 -> `GLOBALFIELD                    (* 4-byte + 1-byte *)
       | 131|132|133|134|135|136 -> `BRANCHCOMP  (* BEQ family: remapped *)
-      | 62|63|64|65|66 -> `MAKEBLOCK
+      | 62|63|64|65 -> `MAKEBLOCK
+      | 66 -> `MAKEFLOAT      (* MAKEFLOATBLOCK: 1-byte size *)
       | _ -> `UNKNOWN
     in
     (match fmt with
      | `ZERO          -> emit_byte op
+     | `PUSHACC       -> emit_byte (op - 1)  (* downgrade PUSHACCn→PUSHACC{n-1} for Camelino frame *)
      | `BYTE1         -> emit_byte op; nxt8 ()
      | `SHORT2        -> emit_byte op; nxt16 ()
      | `INT32         -> emit_byte op; nxt32 ()
@@ -180,7 +185,7 @@ let encode_compact code_str ~use_word_index =
      | `BRANCHCOMP    -> emit_byte op; nxt32_branch ()
      | `SWITCH        -> emit_byte op; nxt32 (); nxt32_branch ()
      | `C_CALL        -> emit_byte op; nxt32 ()
-     | `CLOSURE       -> emit_byte op; nxt32_branch (); nxt8 ()
+     | `CLOSURE       -> emit_byte op; nxt8 (); nxt32_branch ()
      | `CLOSUREREC    ->
         let nfuncs = next_op () land 0xFF in
         let nvars = next_op () land 0xFF in
@@ -189,12 +194,22 @@ let encode_compact code_str ~use_word_index =
         let offset_base = !i in
         let compact_pc = Buffer.length compact in
         for k = 0 to nfuncs - 1 do
-          let off = next_op () land 0xFF in
-          let off_signed = if off < 128 then off else off - 256 in
-          let target_widx = offset_base + k + off_signed in (* word index of target *)
+          let off = next_op () in
+          (* Sign-extend 32-bit word offset to 63-bit OCaml int *)
+          let off_signed = if off land 0x80000000 <> 0 then off - 0x100000000 else off in
+          (* OCaml offsets are relative to the offset word itself *)
+          let target_widx = offset_base + k + off_signed in
           let new_off =
             if target_widx >= 0 && target_widx < nwords
-            then (word_map.(target_widx) - compact_pc)
+            then begin
+              (* Use find_map to skip operand words without map entries *)
+              let rec find j =
+                if j >= nwords || j < 0 then 0
+                else if word_map.(j) <> 0 || j = 0 then word_map.(j)
+                else find (j + 1)
+              in
+              (find target_widx - compact_pc)
+            end
             else off_signed
           in
           emit_byte (new_off land 0xFF)
@@ -202,6 +217,7 @@ let encode_compact code_str ~use_word_index =
      | `APPTERM       -> emit_byte op; nxt8 (); nxt8 ()
      | `GLOBALFIELD   -> emit_byte op; nxt32 (); nxt8 ()
      | `MAKEBLOCK     -> emit_byte op; nxt8 (); emit_byte 0; emit_byte 0  (* tag + sz=0: OCaml 5.x omits zero-size operand *)
+     | `MAKEFLOAT     -> emit_byte op; nxt8 ()
      | `UNKNOWN       -> emit_byte op
     );
   done;

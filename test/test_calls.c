@@ -24,7 +24,7 @@ static void run(uint8_t* bc, size_t len) {
 /* ---- Test 1: f(x)=x+1, call f(5) → 6 ---- */
 void test_apply1(void) {
     uint8_t bc[] = {
-        CLOSURE, 16,0,0,0, 0, PUSH, CONSTINT, 5,0,0,0, PUSH, ACC1, APPLY1, STOP,
+        CLOSURE, 0, 16,0,0,0, PUSH, CONSTINT, 5,0,0,0, PUSH, ACC1, APPLY1, STOP,
         ACC3, OFFSETINT, 1, RETURN, 1
     };
     run(bc, sizeof(bc));
@@ -34,7 +34,7 @@ void test_apply1(void) {
 /* ---- Test 2: f(x)=x+1, call f(99) → 100 ---- */
 void test_apply1_99(void) {
     uint8_t bc[] = {
-        CLOSURE, 16,0,0,0, 0, PUSH, CONSTINT, 99,0,0,0, PUSH, ACC1, APPLY1, STOP,
+        CLOSURE, 0, 16,0,0,0, PUSH, CONSTINT, 99,0,0,0, PUSH, ACC1, APPLY1, STOP,
         ACC3, OFFSETINT, 1, RETURN, 1
     };
     run(bc, sizeof(bc));
@@ -47,7 +47,7 @@ void test_apply2_offsets(void) {
        → ACC2(f) → APPLY2 → STOP
        Function at 22: ACC3(y=4)+OFFSETINT(1)=5 → RETURN */
     uint8_t bc[] = {
-        CLOSURE, 22,0,0,0, 0,
+        CLOSURE, 0, 22,0,0,0,
         PUSH, CONSTINT, 3,0,0,0, PUSH, CONSTINT, 4,0,0,0, PUSH,
         ACC2, APPLY2, STOP,
         ACC3, OFFSETINT, 1, RETURN, 1

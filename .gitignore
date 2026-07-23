@@ -18,6 +18,7 @@ _build/
 *.so
 *.dll
 *.exe
+*.out
 *.byte
 *.native
 .dune/
